@@ -16,9 +16,6 @@ import { create } from "zustand";
 export const ANOS_POR_METRICA_DEFAULT = {
   taxa_mortalidade:            [2023],
   taxa_homicidio:              [2023],
-  mortalidade_cardiovascular:  [2023],
-  mortalidade_cancer:          [2023],
-  mortalidade_respiratoria:    [2023],
   pib_per_capita:              [2022],
   receita_per_capita:          [2022],
   despesa_saude_per_capita:    [2022],
@@ -30,13 +27,7 @@ export const ANOS_POR_METRICA_DEFAULT = {
 export const ANOS_POR_METRICA = ANOS_POR_METRICA_DEFAULT;
 
 // Métricas que suportam filtros demográficos (sexo, cor/raça, faixa etária)
-export const METRICAS_SAUDE = [
-  "taxa_mortalidade",
-  "taxa_homicidio",
-  "mortalidade_cardiovascular",
-  "mortalidade_cancer",
-  "mortalidade_respiratoria",
-];
+export const METRICAS_SAUDE = ["taxa_mortalidade", "taxa_homicidio"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store Zustand: estado global dos filtros

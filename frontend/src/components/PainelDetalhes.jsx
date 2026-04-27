@@ -13,9 +13,6 @@
 const METRICA_LABEL = {
   taxa_mortalidade:            "Taxa de mortalidade",
   taxa_homicidio:              "Taxa de homicídio",
-  mortalidade_cardiovascular:  "Mortalidade cardiovascular",
-  mortalidade_cancer:          "Mortalidade por câncer",
-  mortalidade_respiratoria:    "Mortalidade respiratória",
   pib_per_capita:              "PIB per capita",
   receita_per_capita:          "Receita municipal per capita",
   despesa_saude_per_capita:    "Gasto em saúde per capita",

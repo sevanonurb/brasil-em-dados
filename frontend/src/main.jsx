@@ -51,21 +51,6 @@ const METRICAS_RANGES = {
     ESTADUAL: { min: 0, max: 20000 },
     MUNICIPAL: { min: 0, max: 20000 },
   },
-  mortalidade_cardiovascular: {
-    NACIONAL:  { min: 0, max: 400 },   // UF: ~120–360/100k
-    ESTADUAL:  { min: 0, max: 600 },
-    MUNICIPAL: { min: 0, max: 800 },
-  },
-  mortalidade_cancer: {
-    NACIONAL:  { min: 0, max: 200 },
-    ESTADUAL:  { min: 0, max: 300 },
-    MUNICIPAL: { min: 0, max: 400 },
-  },
-  mortalidade_respiratoria: {
-    NACIONAL:  { min: 0, max: 100 },
-    ESTADUAL:  { min: 0, max: 200 },
-    MUNICIPAL: { min: 0, max: 300 },
-  },
   despesa_saude_per_capita: {
     NACIONAL:  { min: 0, max: 2000 },
     ESTADUAL:  { min: 0, max: 5000 },
@@ -117,9 +102,6 @@ function makeTooltip(metrica, cid10) {
   const LABEL = {
     taxa_mortalidade:            cid10 ? `Mortalidade CID-${cid10}` : "Mortalidade",
     taxa_homicidio:              "Homicídio",
-    mortalidade_cardiovascular:  "Mortalidade cardiovascular",
-    mortalidade_cancer:          "Mortalidade por câncer",
-    mortalidade_respiratoria:    "Mortalidade respiratória",
     pib_per_capita:              "PIB per capita",
     receita_per_capita:          "Receita per capita",
     despesa_saude_per_capita:    "Gasto em saúde",

@@ -8,9 +8,6 @@ import React from "react";
 const METRICAS_LABELS = {
   taxa_mortalidade:            "Mortalidade geral (por 100k hab.)",
   taxa_homicidio:              "Homicídios (por 100k hab.)",
-  mortalidade_cardiovascular:  "Mortalidade cardiovascular (por 100k hab.)",
-  mortalidade_cancer:          "Mortalidade por câncer (por 100k hab.)",
-  mortalidade_respiratoria:    "Mortalidade respiratória (por 100k hab.)",
   pib_per_capita:              "PIB per capita",
   receita_per_capita:          "Receita municipal per capita",
   despesa_saude_per_capita:    "Gasto em saúde per capita",
@@ -32,10 +29,7 @@ function formatarValor(v, metrica) {
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
 
-const METRICAS_SAUDE_SET = new Set([
-  "taxa_mortalidade", "taxa_homicidio",
-  "mortalidade_cardiovascular", "mortalidade_cancer", "mortalidade_respiratoria",
-]);
+const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio"]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {
   const label = METRICAS_LABELS[metrica] ?? metrica;

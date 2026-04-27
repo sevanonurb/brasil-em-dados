@@ -125,8 +125,13 @@ def processar_uf_ano(uf: str, ano: int) -> int:
     # Faixa etária
     df["faixa_etaria"] = df.get("IDADE", pd.Series(dtype="object")).apply(idade_para_faixa)
 
-    # Sexo: 1=Masculino, 2=Feminino
-    df["sexo"] = pd.to_numeric(df.get("SEXO", pd.Series(dtype="object")), errors="coerce").astype("Int8")
+    # Sexo: 1=Masculino, 2=Feminino (0/9/outros → NULL)
+    # DataSUS usa código numérico; pysus às vezes entrega como string ou int.
+    # Garante que apenas 1 e 2 são armazenados — outros valores viram NULL.
+    _sexo_raw = pd.to_numeric(
+        df.get("SEXO", pd.Series(dtype="object")), errors="coerce"
+    ).astype("Int8")
+    df["sexo"] = _sexo_raw.where(_sexo_raw.isin([1, 2]))
 
     # Cor/raça: 1=Branca, 2=Preta, 3=Amarela, 4=Parda, 5=Indígena
     df["cor_raca"] = pd.to_numeric(df.get("RACACOR", pd.Series(dtype="object")), errors="coerce").astype("Int8")

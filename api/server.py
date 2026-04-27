@@ -21,9 +21,6 @@ DB = dict(
 FALLBACK = {
     "taxa_mortalidade":            [2023],
     "taxa_homicidio":              [2023],
-    "mortalidade_cardiovascular":  [2023],
-    "mortalidade_cancer":          [2023],
-    "mortalidade_respiratoria":    [2023],
     "pib_per_capita":              [2022],
     "receita_per_capita":          [2022],
     "despesa_saude_per_capita":    [2022],
@@ -51,9 +48,6 @@ def query_anos():
     return {
         "taxa_mortalidade":            anos_sim or FALLBACK["taxa_mortalidade"],
         "taxa_homicidio":              anos_sim or FALLBACK["taxa_homicidio"],
-        "mortalidade_cardiovascular":  anos_sim or FALLBACK["mortalidade_cardiovascular"],
-        "mortalidade_cancer":          anos_sim or FALLBACK["mortalidade_cancer"],
-        "mortalidade_respiratoria":    anos_sim or FALLBACK["mortalidade_respiratoria"],
         "pib_per_capita":              anos_ec  or FALLBACK["pib_per_capita"],
         "receita_per_capita":          anos_ec  or FALLBACK["receita_per_capita"],
         "despesa_saude_per_capita":    anos_ec  or FALLBACK["despesa_saude_per_capita"],

@@ -42,13 +42,9 @@ const UFS_BRASIL = [
 ];
 
 const METRICAS = [
-  // Saúde geral
+  // Saúde
   { value: "taxa_mortalidade",            label: "Taxa de mortalidade" },
   { value: "taxa_homicidio",              label: "Taxa de homicídio" },
-  // Saúde — causas específicas (CID fixo)
-  { value: "mortalidade_cardiovascular",  label: "Mortalidade cardiovascular" },
-  { value: "mortalidade_cancer",          label: "Mortalidade por câncer" },
-  { value: "mortalidade_respiratoria",    label: "Mortalidade respiratória" },
   // Economia
   { value: "pib_per_capita",              label: "PIB per capita" },
   { value: "receita_per_capita",          label: "Receita municipal per capita" },

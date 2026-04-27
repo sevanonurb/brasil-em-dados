@@ -48,7 +48,7 @@ BEGIN
                   OR
                   (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
-              AND (v_sexo IS NULL OR s.sexo = v_sexo)
+              AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_uf
@@ -201,7 +201,7 @@ BEGIN
                   OR
                   (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
-              AND (v_sexo IS NULL OR s.sexo = v_sexo)
+              AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
@@ -381,7 +381,7 @@ BEGIN
                   OR
                   (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
-              AND (v_sexo IS NULL OR s.sexo = v_sexo)
+              AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
