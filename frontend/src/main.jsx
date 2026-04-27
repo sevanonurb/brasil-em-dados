@@ -1,0 +1,450 @@
+/**
+ * main.jsx — Painel Geoespacial do Brasil
+ *
+ * Deck.gl v9 + MapLibre GL JS — arquitetura dual:
+ * - MapLibre: basemap contextual
+ * - Deck.gl: camadas temáticas analíticas sobre o basemap
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import maplibregl from "maplibre-gl";
+import { Deck } from "@deck.gl/core";
+import { MVTLayer } from "@deck.gl/geo-layers";
+import { Protocol } from "pmtiles";
+
+import {
+  getNivelSemantico,
+  getTileUrl,
+  calcularOpacidade,
+  NIVEL_METADATA,
+} from "./layers/semantic_zoom.js";
+import { useFiltrosStore } from "./filters/cross_filter.js";
+import { PainelControles } from "./components/PainelControles.jsx";
+import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
+import { Legenda } from "./components/Legenda.jsx";
+
+// Registra protocolo PMTiles no MapLibre
+const pmtilesProtocol = new Protocol();
+maplibregl.addProtocol("pmtiles", pmtilesProtocol.tile);
+
+// Intervalos realistas por métrica × nível semântico
+// Derivados dos dados reais: SIM 2023, 5570 municípios, 27 UFs
+const METRICAS_RANGES = {
+  taxa_mortalidade: {
+    NACIONAL: { min: 300,  max: 1000  },  // UF: 404–919 /100k
+    ESTADUAL: { min: 0,    max: 1500  },  // Município: 163–1467 /100k
+    MUNICIPAL: { min: 0,   max: 2000  },
+  },
+  taxa_homicidio: {
+    NACIONAL: { min: 0, max: 60 },
+    ESTADUAL: { min: 0, max: 150 },
+    MUNICIPAL: { min: 0, max: 200 },
+  },
+  pib_per_capita: {
+    NACIONAL: { min: 0, max: 80000 },
+    ESTADUAL: { min: 0, max: 200000 },
+    MUNICIPAL: { min: 0, max: 200000 },
+  },
+  receita_per_capita: {
+    NACIONAL: { min: 0, max: 8000 },
+    ESTADUAL: { min: 0, max: 20000 },
+    MUNICIPAL: { min: 0, max: 20000 },
+  },
+  // Densidade demográfica (hab/km²) — escala própria de setor censitário
+  // UF: P90=178 (SP), max=486 (DF) → cap 400
+  // Município: P50=24, P90=134, P99=2160 → cap 400 mostra variação real
+  // Setor: P50=3408, P90=18839 → cap 20k
+  densidade_pop: {
+    NACIONAL: { min: 0, max: 400 },    // UF: 2–486 hab/km²
+    ESTADUAL: { min: 0, max: 400 },    // Município: P90=134, max=13k
+    MUNICIPAL: { min: 0, max: 20000 }, // Setor censitário (Censo 2022)
+  },
+};
+
+// Escalas específicas por capítulo CID-10 (taxas /100k muito menores que mortalidade geral)
+const CID10_RANGES = {
+  I: { NACIONAL: { min: 0, max: 400 }, ESTADUAL: { min: 0, max: 600 } },  // Cardiovascular: UF ~120–360/100k
+  C: { NACIONAL: { min: 0, max: 200 }, ESTADUAL: { min: 0, max: 300 } },  // Neoplasias: UF ~80–180/100k
+  J: { NACIONAL: { min: 0, max: 100 }, ESTADUAL: { min: 0, max: 200 } },  // Respiratórias
+  E: { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 120 } },  // Endócrinas/Diabetes
+  F: { NACIONAL: { min: 0, max: 30  }, ESTADUAL: { min: 0, max: 60  } },  // Transtornos mentais
+  X: { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 120 } },  // Causas externas
+};
+
+const METRICAS_SEM_DADOS = [];
+
+// Busca os anos disponíveis no banco via API e atualiza o store
+function useAnosDisponiveis() {
+  const setAnosDisponiveis = useFiltrosStore(s => s.setAnosDisponiveis);
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
+    fetch(`${apiUrl}/api/anos`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setAnosDisponiveis(data); })
+      .catch(() => {}); // mantém o fallback em caso de erro
+  }, [setAnosDisponiveis]);
+}
+
+// Retorna uma função getTooltip que mostra o indicador atualmente selecionado.
+// Recebe metrica e cid10 como closure para exibir label correto.
+function makeTooltip(metrica, cid10) {
+  const LABEL = {
+    taxa_mortalidade:   cid10 ? `Mortalidade CID-${cid10}` : "Mortalidade",
+    taxa_homicidio:     "Homicídio",
+    pib_per_capita:     "PIB per capita",
+    receita_per_capita: "Receita per capita",
+  };
+
+  return ({ object }) => {
+    if (!object?.properties) return null;
+    const p = object.properties;
+    const nome = p.nome_municipio || p.nome || p.sigla || `Setor ${p.cod_setor}`;
+    const label = LABEL[metrica] || metrica;
+    const valor = p.valor_metrica;
+
+    let formatado;
+    if (valor == null || valor === "") {
+      formatado = "<i style='color:#718096'>sem dados</i>";
+    } else {
+      const n = Number(valor);
+      if (!isFinite(n)) {
+        formatado = "<i style='color:#718096'>sem dados</i>";
+      } else if (metrica === "pib_per_capita" || metrica === "receita_per_capita") {
+        formatado = `<b>R$\u00a0${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b>`;
+      } else {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
+      }
+    }
+
+    const pop = p.populacao_2022 ?? p.populacao_total;
+    const popLine = pop != null
+      ? `<br/>Pop.: <b>${Number(pop).toLocaleString("pt-BR")}</b>`
+      : "";
+
+    return {
+      html: `<strong>${nome}</strong><br/>${label}: ${formatado}${popLine}`,
+      style: {
+        backgroundColor: "#1a202c",
+        color: "#e2e8f0",
+        border: "1px solid #4a5568",
+        borderRadius: "6px",
+        padding: "8px 12px",
+        fontSize: "12px",
+        maxWidth: "240px",
+      },
+    };
+  };
+}
+
+const INITIAL_VIEW = {
+  longitude: -51.9253,
+  latitude: -14.235,
+  zoom: 4,
+  pitch: 0,
+  bearing: 0,
+};
+
+function getCorCoroplética(valorNormalizado, opacity = 220) {
+  const t = Math.max(0, Math.min(1, valorNormalizado));
+  const r = Math.round(t < 0.5 ? t * 2 * 255 : 255);
+  const g = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
+  const b = Math.round(t < 0.5 ? 255 - t * 2 * 255 : 0);
+  return [r, g, b, opacity];
+}
+
+function normalizarValor(v, min, max) {
+  if (max === min) return 0.5;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, (n - min) / (max - min)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const deckRef = useRef(null);
+
+  const [viewState, setViewState] = useState(INITIAL_VIEW);
+  const [featureSelecionada, setFeatureSelecionada] = useState(null);
+  const [estatisticas, setEstatisticas] = useState({ min: 0, max: 100 });
+
+  const filtros = useFiltrosStore();
+  useAnosDisponiveis(); // busca anos disponíveis do banco na inicialização
+
+  // null = automático (segue o zoom); string = nível forçado pelo painel
+  const [nivelForcado, setNivelForcado] = useState(null);
+  const nivelAtual = nivelForcado ?? getNivelSemantico(viewState.zoom);
+
+  const serverParams = filtros.getServerParams();
+  const tileUrlKey = JSON.stringify(serverParams);
+
+  // Atualiza a escala de cores quando a métrica, nível ou filtro CID muda
+  useEffect(() => {
+    const ranges = METRICAS_RANGES[filtros.metrica];
+    if (!ranges) return;
+    const level = nivelAtual === "GEOLOCALIZACAO" ? "MUNICIPAL" : nivelAtual;
+
+    // Quando CID-10 está ativo na taxa de mortalidade, usa escala específica da doença
+    if (filtros.metrica === "taxa_mortalidade" && filtros.cid10_capitulo) {
+      const cidRanges = CID10_RANGES[filtros.cid10_capitulo];
+      if (cidRanges) {
+        setEstatisticas(cidRanges[level] ?? cidRanges.ESTADUAL);
+        return;
+      }
+    }
+
+    const range = ranges[level] ?? ranges.ESTADUAL;
+    setEstatisticas(range);
+  }, [filtros.metrica, nivelAtual, filtros.cid10_capitulo]);
+
+  // Inicia MapLibre + Deck.gl uma única vez
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: {
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#1a1f2e" },
+          },
+        ],
+      },
+      center: [INITIAL_VIEW.longitude, INITIAL_VIEW.latitude],
+      zoom: INITIAL_VIEW.zoom,
+      interactive: false, // Deck.gl controla a interação
+    });
+
+    // Adiciona basemap OSM quando zoom >= 9 (nível municipal)
+    map.on("load", () => {
+      map.addSource("osm", {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "© OpenStreetMap",
+      });
+      map.addLayer({
+        id: "osm-tiles",
+        type: "raster",
+        source: "osm",
+        paint: {
+          "raster-opacity": [
+            "interpolate", ["linear"], ["zoom"],
+            8, 0, 10, 0.35, 14, 0.6,
+          ],
+        },
+      });
+    });
+
+    mapRef.current = map;
+
+    const deck = new Deck({
+      canvas: "deck-canvas",
+      width: "100%",
+      height: "100%",
+      initialViewState: INITIAL_VIEW,
+      controller: true,
+
+      onViewStateChange: ({ viewState: vs }) => {
+        setViewState(vs);
+        map.jumpTo({
+          center: [vs.longitude, vs.latitude],
+          zoom: vs.zoom,
+          bearing: vs.bearing,
+          pitch: vs.pitch,
+        });
+      },
+      // getTooltip é atualizado via setProps no efeito de camadas
+      // para sempre refletir o indicador e filtros atuais.
+    });
+
+    deckRef.current = deck;
+
+    return () => {
+      deck.finalize();
+      map.remove();
+      mapRef.current = null;
+      deckRef.current = null;
+    };
+  }, []);
+
+  // Atualiza camadas quando estado muda
+  useEffect(() => {
+    if (!deckRef.current) return;
+
+    const layers = [];
+
+    // Quando o nível é forçado manualmente, usa opacidade total (ignora fade por zoom)
+    const op = (zIn, zOut) => nivelForcado ? 1 : calcularOpacidade(viewState.zoom, zIn, zOut);
+
+    // Cor coroplética compartilhada por todas as camadas de fundo
+    const getChoroplethColor = (f) => {
+      const raw = f.properties?.valor_metrica;
+      if (raw == null || raw === "") return [55, 60, 75, 160];
+      const val = Number(raw);
+      if (!isFinite(val)) return [55, 60, 75, 160];
+      return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+    };
+
+
+    if (nivelAtual === "NACIONAL") {
+      layers.push(new MVTLayer({
+        id: "ufs-layer",
+        data: getTileUrl("NACIONAL", serverParams),
+        opacity: op(0, 6),
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: [255, 255, 255, 80],
+        getFillColor: (f) => {
+          const raw = f.properties?.valor_metrica;
+          if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
+          const val = Number(raw);
+          if (!isFinite(val)) return [55, 60, 75, 160];
+          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+        },
+        getLineColor: [60, 60, 80, 200],
+        getLineWidth: 1,
+        lineWidthMinPixels: 0.8,
+        onClick: ({ object }) => object && setFeatureSelecionada(object),
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+      }));
+    }
+
+    if (nivelAtual === "ESTADUAL") {
+      // When a UF is selected, show all UFs dimmed as geographic reference
+      if (filtros.cod_uf) {
+        layers.push(new MVTLayer({
+          id: "ufs-dim-bg",
+          data: `${import.meta.env.VITE_MARTIN_URL}/tiles_ufs/{z}/{x}/{y}`,
+          opacity: 1,
+          pickable: false,
+          getFillColor: [60, 70, 95, 160],
+          getLineColor: [100, 115, 145, 180],
+          getLineWidth: 1,
+          lineWidthMinPixels: 0.8,
+        }));
+      }
+
+      layers.push(new MVTLayer({
+        id: "municipios-layer",
+        data: getTileUrl("ESTADUAL", serverParams),
+        opacity: op(5, 12),
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: [255, 255, 255, 60],
+        getFillColor: (f) => {
+          const raw = f.properties?.valor_metrica;
+          if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
+          const val = Number(raw);
+          if (!isFinite(val)) return [55, 60, 75, 160];
+          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+        },
+        getLineColor: [20, 20, 20, 150],
+        getLineWidth: 0.5,
+        lineWidthMinPixels: 0.3,
+        onClick: ({ object }) => object && setFeatureSelecionada(object),
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+      }));
+    }
+
+    if (nivelAtual === "MUNICIPAL") {
+      layers.push(new MVTLayer({
+        id: "setores-layer",
+        data: getTileUrl("MUNICIPAL", serverParams),
+        minZoom: 0,
+        opacity: op(0, 15),
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: [255, 255, 255, 60],
+        getFillColor: getChoroplethColor,
+        getLineColor: [20, 20, 20, 120],
+        getLineWidth: 0.3,
+        lineWidthMinPixels: 0.2,
+        pointRadiusMinPixels: 3,
+        onClick: ({ object }) => object && setFeatureSelecionada(object),
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+      }));
+    }
+
+    if (nivelAtual === "GEOLOCALIZACAO") {
+      layers.push(new MVTLayer({
+        id: "cnefe-layer",
+        data: getTileUrl("GEOLOCALIZACAO", serverParams),
+        minZoom: 0,
+        opacity: op(0, 22),
+        pickable: false,
+        getPointRadius: 3,
+        pointRadiusMinPixels: 2,
+        getFillColor: [255, 200, 50, 180],
+      }));
+    }
+
+    deckRef.current.setProps({
+      layers,
+      getTooltip: makeTooltip(filtros.metrica, filtros.cid10_capitulo),
+    });
+  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros]);
+
+  return (
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      {/* Mapa base MapLibre */}
+      <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
+
+      {/* Canvas Deck.gl sobreposto */}
+      <canvas
+        id="deck-canvas"
+        style={{ position: "absolute", inset: 0, pointerEvents: "all" }}
+      />
+
+      {/* Painel de controles */}
+      <PainelControles
+        nivelAtual={nivelAtual}
+        nivelForcado={nivelForcado}
+        zoom={viewState.zoom}
+        filtros={filtros}
+        onMetricaChange={filtros.setMetrica}
+        onUFChange={filtros.setUF}
+        onFaixaEtariaChange={filtros.setFaixaEtaria}
+        onCorRacaChange={filtros.setCorRaca}
+        onNivelChange={setNivelForcado}
+      />
+
+      {/* Legenda de cores */}
+      <Legenda
+        metrica={filtros.metrica}
+        min={estatisticas.min}
+        max={estatisticas.max}
+        semDados={METRICAS_SEM_DADOS.includes(filtros.metrica)}
+      />
+
+      {/* Painel de detalhes */}
+      {featureSelecionada && (
+        <PainelDetalhes
+          feature={featureSelecionada}
+          nivel={nivelAtual}
+          filtros={serverParams}
+          onClose={() => setFeatureSelecionada(null)}
+        />
+      )}
+
+      {/* Indicador de nível semântico */}
+      <div style={{
+        position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
+        background: "rgba(15,17,23,0.85)", border: "1px solid #4a5568",
+        borderRadius: 24, padding: "6px 16px", fontSize: 13,
+        pointerEvents: "none", backdropFilter: "blur(8px)", color: "#e2e8f0",
+      }}>
+        {NIVEL_METADATA[nivelAtual].icone} {NIVEL_METADATA[nivelAtual].label}
+        {" — "}{NIVEL_METADATA[nivelAtual].descricao}
+      </div>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<App />);

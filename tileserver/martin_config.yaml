@@ -1,0 +1,23 @@
+# =============================================================================
+# martin_config.yaml — Martin v1.7
+# =============================================================================
+
+postgres:
+  - connection_string: ${DATABASE_URL}
+    pool_size: 10
+    auto_publish:
+      tables:
+        from_schemas:
+          - geo
+          - api
+          - censo
+      functions:
+        from_schemas:
+          - api
+
+# PMTiles fallback
+pmtiles:
+  paths:
+    - /pmtiles
+
+worker_processes: 4

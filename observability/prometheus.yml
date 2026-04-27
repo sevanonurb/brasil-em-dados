@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # ─── Martin: Vector Tile Server ───────────────────────────────────────────
+  - job_name: "martin"
+    static_configs:
+      - targets: ["martin:3000"]
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # ─── PostgreSQL via postgres_exporter ─────────────────────────────────────
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres_exporter:9187"]
+    scrape_interval: 30s
+
+  # ─── Redis ────────────────────────────────────────────────────────────────
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis_exporter:9121"]
+    scrape_interval: 15s
+
+  # ─── PgBouncer ────────────────────────────────────────────────────────────
+  - job_name: "pgbouncer"
+    static_configs:
+      - targets: ["pgbouncer_exporter:9127"]
+    scrape_interval: 15s
