@@ -204,11 +204,28 @@ SELECT
               AND s.cid10_codigo < 'Y1'
         ) * 100000.0 / NULLIF(m.populacao_2022, 0), 1
     )                                               AS taxa_homicidio_2023,
+    -- Saúde — mortalidade por causa específica 2023
+    ROUND(
+        COUNT(s.id) FILTER (WHERE s.ano = 2023 AND s.cid10_capitulo = 'I')
+        * 100000.0 / NULLIF(m.populacao_2022, 0), 1
+    )                                               AS mortalidade_cardiovascular_2023,
+    ROUND(
+        COUNT(s.id) FILTER (WHERE s.ano = 2023 AND s.cid10_capitulo = 'C')
+        * 100000.0 / NULLIF(m.populacao_2022, 0), 1
+    )                                               AS mortalidade_cancer_2023,
+    ROUND(
+        COUNT(s.id) FILTER (WHERE s.ano = 2023 AND s.cid10_capitulo = 'J')
+        * 100000.0 / NULLIF(m.populacao_2022, 0), 1
+    )                                               AS mortalidade_respiratoria_2023,
     -- Economia (Siconfi/FINBRA 2022)
     e.receita_total                                 AS receita_municipal_2022,
     e.transferencias_sus                            AS transferencias_sus_2022,
     e.pib                                           AS pib_2022,
-    ROUND(e.pib / NULLIF(m.populacao_2022, 0), 2)  AS pib_per_capita_2022
+    ROUND(e.pib / NULLIF(m.populacao_2022, 0), 2)  AS pib_per_capita_2022,
+    e.despesa_saude                                 AS despesa_saude_2022,
+    e.despesa_educacao                              AS despesa_educacao_2022,
+    ROUND(e.despesa_saude    / NULLIF(m.populacao_2022, 0), 2) AS despesa_saude_per_capita_2022,
+    ROUND(e.despesa_educacao / NULLIF(m.populacao_2022, 0), 2) AS despesa_educacao_per_capita_2022
 FROM geo.municipios m
 LEFT JOIN saude.sim_mortalidade s
     ON m.cod_ibge_7 / 10 = s.cod_municipio   -- SIM usa código IBGE 6 dígitos; geo usa 7 dígitos
@@ -216,7 +233,7 @@ LEFT JOIN economia.siconfi_municipios e
     ON e.cod_municipio = m.cod_ibge_7 AND e.ano = 2022
 GROUP BY m.cod_ibge_7, m.cod_uf, m.nome, m.geom, m.geom_simplified,
          m.area_km2, m.populacao_2022, e.receita_total,
-         e.transferencias_sus, e.pib;
+         e.transferencias_sus, e.pib, e.despesa_saude, e.despesa_educacao;
 
 -- Índice espacial na vista materializada (recriado no REFRESH CONCURRENTLY)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_indicadores_municipio_pk
@@ -237,11 +254,16 @@ SELECT
     u.geom_simplified,
     u.area_km2,
     SUM(im.populacao_2022)               AS populacao_total,
-    ROUND(AVG(im.taxa_mortalidade_2023), 1)  AS taxa_mortalidade_media,
-    ROUND(AVG(im.taxa_homicidio_2023), 1)    AS taxa_homicidio_media,
-    SUM(im.receita_municipal_2022)           AS receita_estadual_total,
-    SUM(im.transferencias_sus_2022)          AS transferencias_sus_total,
-    SUM(im.pib_2022)                         AS pib_estadual
+    ROUND(AVG(im.taxa_mortalidade_2023), 1)              AS taxa_mortalidade_media,
+    ROUND(AVG(im.taxa_homicidio_2023), 1)               AS taxa_homicidio_media,
+    ROUND(AVG(im.mortalidade_cardiovascular_2023), 1)   AS mortalidade_cardiovascular_media,
+    ROUND(AVG(im.mortalidade_cancer_2023), 1)           AS mortalidade_cancer_media,
+    ROUND(AVG(im.mortalidade_respiratoria_2023), 1)     AS mortalidade_respiratoria_media,
+    SUM(im.receita_municipal_2022)                      AS receita_estadual_total,
+    SUM(im.transferencias_sus_2022)                     AS transferencias_sus_total,
+    SUM(im.pib_2022)                                    AS pib_estadual,
+    SUM(im.despesa_saude_2022)                          AS despesa_saude_estadual_2022,
+    SUM(im.despesa_educacao_2022)                       AS despesa_educacao_estadual_2022
 FROM geo.ufs u
 LEFT JOIN api.indicadores_municipio im ON im.cod_uf = u.cod_uf
 GROUP BY u.cod_uf, u.sigla, u.nome, u.regiao, u.geom, u.geom_simplified,

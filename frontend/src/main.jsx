@@ -51,6 +51,31 @@ const METRICAS_RANGES = {
     ESTADUAL: { min: 0, max: 20000 },
     MUNICIPAL: { min: 0, max: 20000 },
   },
+  mortalidade_cardiovascular: {
+    NACIONAL:  { min: 0, max: 400 },   // UF: ~120–360/100k
+    ESTADUAL:  { min: 0, max: 600 },
+    MUNICIPAL: { min: 0, max: 800 },
+  },
+  mortalidade_cancer: {
+    NACIONAL:  { min: 0, max: 200 },
+    ESTADUAL:  { min: 0, max: 300 },
+    MUNICIPAL: { min: 0, max: 400 },
+  },
+  mortalidade_respiratoria: {
+    NACIONAL:  { min: 0, max: 100 },
+    ESTADUAL:  { min: 0, max: 200 },
+    MUNICIPAL: { min: 0, max: 300 },
+  },
+  despesa_saude_per_capita: {
+    NACIONAL:  { min: 0, max: 2000 },
+    ESTADUAL:  { min: 0, max: 5000 },
+    MUNICIPAL: { min: 0, max: 5000 },
+  },
+  despesa_educacao_per_capita: {
+    NACIONAL:  { min: 0, max: 2000 },
+    ESTADUAL:  { min: 0, max: 5000 },
+    MUNICIPAL: { min: 0, max: 5000 },
+  },
   // Densidade demográfica (hab/km²) — escala própria de setor censitário
   // UF: P90=178 (SP), max=486 (DF) → cap 400
   // Município: P50=24, P90=134, P99=2160 → cap 400 mostra variação real
@@ -90,11 +115,22 @@ function useAnosDisponiveis() {
 // Recebe metrica e cid10 como closure para exibir label correto.
 function makeTooltip(metrica, cid10) {
   const LABEL = {
-    taxa_mortalidade:   cid10 ? `Mortalidade CID-${cid10}` : "Mortalidade",
-    taxa_homicidio:     "Homicídio",
-    pib_per_capita:     "PIB per capita",
-    receita_per_capita: "Receita per capita",
+    taxa_mortalidade:            cid10 ? `Mortalidade CID-${cid10}` : "Mortalidade",
+    taxa_homicidio:              "Homicídio",
+    mortalidade_cardiovascular:  "Mortalidade cardiovascular",
+    mortalidade_cancer:          "Mortalidade por câncer",
+    mortalidade_respiratoria:    "Mortalidade respiratória",
+    pib_per_capita:              "PIB per capita",
+    receita_per_capita:          "Receita per capita",
+    despesa_saude_per_capita:    "Gasto em saúde",
+    despesa_educacao_per_capita: "Gasto em educação",
+    densidade_pop:               "Densidade demográfica",
   };
+
+  const METRICAS_REAIS = new Set([
+    "pib_per_capita", "receita_per_capita",
+    "despesa_saude_per_capita", "despesa_educacao_per_capita",
+  ]);
 
   return ({ object }) => {
     if (!object?.properties) return null;
@@ -110,8 +146,10 @@ function makeTooltip(metrica, cid10) {
       const n = Number(valor);
       if (!isFinite(n)) {
         formatado = "<i style='color:#718096'>sem dados</i>";
-      } else if (metrica === "pib_per_capita" || metrica === "receita_per_capita") {
+      } else if (METRICAS_REAIS.has(metrica)) {
         formatado = `<b>R$\u00a0${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b>`;
+      } else if (metrica === "densidade_pop") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> hab/km²`;
       } else {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
       }
@@ -412,6 +450,8 @@ export default function App() {
         onUFChange={filtros.setUF}
         onFaixaEtariaChange={filtros.setFaixaEtaria}
         onCorRacaChange={filtros.setCorRaca}
+        onSexoChange={filtros.setSexo}
+        onEspecieChange={filtros.setEspecie}
         onNivelChange={setNivelForcado}
       />
 

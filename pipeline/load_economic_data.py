@@ -104,8 +104,19 @@ SICONFI_PARAMS = "?an_exercicio={ano}&nr_periodo=6&co_tipo_demonstrativo=RREO&id
 COD_CONTA_ALVO = "ReceitasExcetoIntraOrcamentarias"
 COLUNA_ALVO    = "Até o Bimestre (c)"
 
+# Gasto em saúde (LC 141/2012 — mínimo constitucional Saúde)
+# Fonte: RREO Anexo 10 — Despesas com Ações e Serviços Públicos de Saúde
+COD_CONTA_SAUDE  = "AplicacaoTotalDasDespesasComAcoesEServicosPublicosDeSaude"
+COLUNA_SAUDE     = "Valor Apurado Até o Bimestre"
 
-def _fetch_receita_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None]:
+# Gasto em educação (CF art. 212 — mínimo constitucional MDE)
+# Fonte: RREO Demonstrativo Simplificado — Mínimo Anual da Receita de Impostos na MDE
+COD_CONTA_EDU    = "MinimoAnualDasReceitasDeImpostosNaManutencaoEDesenvolvimentoDoEnsinoDemonstrativoSimplificado"
+COLUNA_EDU       = "Valor Apurado Até o Bimestre"
+
+
+def _fetch_receita_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None, float | None, float | None]:
+    """Retorna (cod_ibge, receita_total, despesa_saude, despesa_educacao)."""
     url = SICONFI_BASE + SICONFI_PARAMS.format(ano=ano, cod_ibge=cod_ibge)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "brasil-em-dados/1.0"})
@@ -113,47 +124,74 @@ def _fetch_receita_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None
         data = json.loads(resp.read())
         items = data.get("items", [])
 
-        # Filtro local: conta e coluna exatas
-        # A API ignora filtros de conta/coluna nos query params
-        for item in items:
-            if item.get("cod_conta") == COD_CONTA_ALVO and item.get("coluna") == COLUNA_ALVO:
-                return cod_ibge, float(item["valor"])
+        receita = saude = educacao = None
 
-        # Fallback: nome completo da conta (caso cod_conta difira entre versões)
         for item in items:
-            conta = item.get("conta", "")
-            if "EXCETO INTRA" in conta and item.get("coluna") == COLUNA_ALVO:
-                return cod_ibge, float(item["valor"])
+            cod = item.get("cod_conta", "")
+            col = item.get("coluna", "")
 
-        return cod_ibge, None
+            # Receita total
+            if receita is None and cod == COD_CONTA_ALVO and col == COLUNA_ALVO:
+                try: receita = float(item["valor"])
+                except (TypeError, ValueError): pass
+
+            # Despesa saúde (ASPS)
+            if saude is None and cod == COD_CONTA_SAUDE and col == COLUNA_SAUDE:
+                try: saude = float(item["valor"])
+                except (TypeError, ValueError): pass
+
+            # Despesa educação (MDE)
+            if educacao is None and cod == COD_CONTA_EDU and col == COLUNA_EDU:
+                try: educacao = float(item["valor"])
+                except (TypeError, ValueError): pass
+
+        # Fallback receita: nome completo da conta
+        if receita is None:
+            for item in items:
+                conta = item.get("conta", "")
+                if "EXCETO INTRA" in conta and item.get("coluna") == COLUNA_ALVO:
+                    try: receita = float(item["valor"])
+                    except (TypeError, ValueError): pass
+                    break
+
+        return cod_ibge, receita, saude, educacao
     except Exception:
-        return cod_ibge, None
+        return cod_ibge, None, None, None
 
 
-def baixar_receita_siconfi(cod_ibge_list: list[int], ano: int, workers: int = 40) -> dict[int, float]:
-    print(f"  Baixando receita Siconfi RREO {ano} para {len(cod_ibge_list)} municípios...")
-    receita_map = {}
+def baixar_receita_siconfi(
+    cod_ibge_list: list[int], ano: int, workers: int = 40
+) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+    """Retorna (receita_map, saude_map, educacao_map) em uma única passagem pela API."""
+    print(f"  Baixando receita + despesas Siconfi RREO {ano} para {len(cod_ibge_list)} municípios...")
+    receita_map: dict[int, float] = {}
+    saude_map:   dict[int, float] = {}
+    edu_map:     dict[int, float] = {}
     done = 0
     t0 = time.time()
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_fetch_receita_municipio, cod, ano): cod for cod in cod_ibge_list}
         for future in as_completed(futures):
-            cod_ibge, valor = future.result()
-            if valor is not None:
-                receita_map[cod_ibge] = valor
+            cod_ibge, receita, saude, educacao = future.result()
+            if receita   is not None: receita_map[cod_ibge] = receita
+            if saude     is not None: saude_map[cod_ibge]   = saude
+            if educacao  is not None: edu_map[cod_ibge]     = educacao
             done += 1
             if done % 500 == 0:
                 elapsed = time.time() - t0
-                print(f"    {done}/{len(cod_ibge_list)} ({elapsed:.0f}s) — {len(receita_map)} com dados")
+                print(f"    {done}/{len(cod_ibge_list)} ({elapsed:.0f}s)"
+                      f" — receita={len(receita_map)} saude={len(saude_map)} edu={len(edu_map)}")
 
-    print(f"    → {len(receita_map)}/{len(cod_ibge_list)} municípios com receita {ano} ({time.time()-t0:.0f}s)")
-    return receita_map
+    print(f"    → receita={len(receita_map)} saude={len(saude_map)} edu={len(edu_map)}"
+          f" / {len(cod_ibge_list)} municípios ({time.time()-t0:.0f}s)")
+    return receita_map, saude_map, edu_map
 
 
 # ─── 3. Inserção no PostGIS ───────────────────────────────────────────────────
 
-def inserir_siconfi(pib_map: dict, receita_map: dict, ano: int):
+def inserir_siconfi(pib_map: dict, receita_map: dict, ano: int,
+                    saude_map: dict | None = None, edu_map: dict | None = None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -162,10 +200,12 @@ def inserir_siconfi(pib_map: dict, receita_map: dict, ano: int):
 
             rows = []
             for cod_ibge_7, cod_uf in municipios:
-                pib     = pib_map.get(cod_ibge_7)
-                receita = receita_map.get(cod_ibge_7)
-                if pib is not None or receita is not None:
-                    rows.append((cod_ibge_7, cod_uf, ano, receita, None, None, None, pib))
+                pib      = pib_map.get(cod_ibge_7)
+                receita  = receita_map.get(cod_ibge_7)
+                desp_s   = (saude_map  or {}).get(cod_ibge_7)
+                desp_e   = (edu_map    or {}).get(cod_ibge_7)
+                if pib is not None or receita is not None or desp_s is not None or desp_e is not None:
+                    rows.append((cod_ibge_7, cod_uf, ano, receita, desp_s, desp_e, None, pib))
 
             execute_values(
                 cur,
@@ -187,7 +227,9 @@ def inserir_siconfi(pib_map: dict, receita_map: dict, ano: int):
             conn.commit()
         n_rec = sum(1 for r in rows if r[3] is not None)
         n_pib = sum(1 for r in rows if r[7] is not None)
-        print(f"  Upsert {ano} OK — {n_rec} municípios com receita, {n_pib} com PIB")
+        n_sau = sum(1 for r in rows if r[4] is not None)
+        n_edu = sum(1 for r in rows if r[5] is not None)
+        print(f"  Upsert {ano} OK — receita={n_rec} pib={n_pib} saude={n_sau} edu={n_edu}")
     finally:
         conn.close()
 
@@ -365,12 +407,16 @@ if __name__ == "__main__":
 
     for ano in todos_anos:
         print(f"─── Ano {ano} ───")
-        pib_map     = baixar_pib_ibge(ano)     if ano in args.anos_pib     else {}
-        receita_map = baixar_receita_siconfi(cod_list, ano, workers=args.workers) \
-                      if ano in args.anos_siconfi else {}
+        pib_map = baixar_pib_ibge(ano) if ano in args.anos_pib else {}
 
-        if pib_map or receita_map:
-            inserir_siconfi(pib_map, receita_map, ano)
+        receita_map, saude_map, edu_map = {}, {}, {}
+        if ano in args.anos_siconfi:
+            receita_map, saude_map, edu_map = baixar_receita_siconfi(
+                cod_list, ano, workers=args.workers
+            )
+
+        if pib_map or receita_map or saude_map or edu_map:
+            inserir_siconfi(pib_map, receita_map, ano, saude_map=saude_map, edu_map=edu_map)
         else:
             print(f"  Nenhum dado disponível para {ano}, pulando.")
         print()

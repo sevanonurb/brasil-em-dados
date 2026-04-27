@@ -14,15 +14,29 @@ import { create } from "zustand";
 // Anos-padrão por métrica (fallback até o fetch da API completar).
 // Mostra apenas o último ano com dados confirmados para evitar mapa em branco.
 export const ANOS_POR_METRICA_DEFAULT = {
-  taxa_mortalidade:   [2023],
-  taxa_homicidio:     [2023],
-  pib_per_capita:     [2022],
-  receita_per_capita: [2022],
-  densidade_pop:      [2022],
+  taxa_mortalidade:            [2023],
+  taxa_homicidio:              [2023],
+  mortalidade_cardiovascular:  [2023],
+  mortalidade_cancer:          [2023],
+  mortalidade_respiratoria:    [2023],
+  pib_per_capita:              [2022],
+  receita_per_capita:          [2022],
+  despesa_saude_per_capita:    [2022],
+  despesa_educacao_per_capita: [2022],
+  densidade_pop:               [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes
 export const ANOS_POR_METRICA = ANOS_POR_METRICA_DEFAULT;
+
+// Métricas que suportam filtros demográficos (sexo, cor/raça, faixa etária)
+export const METRICAS_SAUDE = [
+  "taxa_mortalidade",
+  "taxa_homicidio",
+  "mortalidade_cardiovascular",
+  "mortalidade_cancer",
+  "mortalidade_respiratoria",
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store Zustand: estado global dos filtros
@@ -38,6 +52,8 @@ export const useFiltrosStore = create((set, get) => ({
   faixa_etaria_min: 0,
   faixa_etaria_max: 17,
   cor_raca: null,  // null = todos; 1=Branca, 2=Preta, 4=Parda, 5=Indígena
+  sexo: null,      // null = todos; 'M' = Masculino, 'F' = Feminino
+  especie: null,   // null = todos; 1=Residencial, 2=Coletivo (apenas CNEFE)
 
   // Anos disponíveis por métrica — preenchido pelo fetch da API em main.jsx
   anosDisponiveis: ANOS_POR_METRICA_DEFAULT,
@@ -53,6 +69,8 @@ export const useFiltrosStore = create((set, get) => ({
   },
   setFaixaEtaria: ([min, max]) => set({ faixa_etaria_min: min, faixa_etaria_max: max }),
   setCorRaca: (cor_raca) => set({ cor_raca }),
+  setSexo: (sexo) => set({ sexo }),
+  setEspecie: (especie) => set({ especie }),
   setAnosDisponiveis: (anosDisponiveis) => {
     // Quando os anos chegam, corrige o ano selecionado se não estiver disponível
     const { metrica, ano } = get();
@@ -68,25 +86,29 @@ export const useFiltrosStore = create((set, get) => ({
     faixa_etaria_min: 0,
     faixa_etaria_max: 17,
     cor_raca: null,
+    sexo: null,
+    especie: null,
   }),
 
   // Serializa os filtros como query params para o Martin.
   // Filtros demográficos só são incluídos quando não estão no valor padrão
   // (evita fragmentar o cache para métricas que não os usam).
   getServerParams: () => {
-    const { ano, cod_uf, cid10_capitulo, metrica, faixa_etaria_min, faixa_etaria_max, cor_raca } = get();
+    const { ano, cod_uf, cid10_capitulo, metrica,
+            faixa_etaria_min, faixa_etaria_max, cor_raca, sexo, especie } = get();
     const params = { ano, cod_uf, cid10_capitulo, metrica };
 
     // Filtros demográficos afetam apenas métricas de saúde
-    if (metrica === "taxa_mortalidade" || metrica === "taxa_homicidio") {
+    if (METRICAS_SAUDE.includes(metrica)) {
       if (faixa_etaria_min !== 0 || faixa_etaria_max !== 17) {
         params.faixa_etaria_min = faixa_etaria_min;
         params.faixa_etaria_max = faixa_etaria_max;
       }
-      if (cor_raca !== null) {
-        params.cor_raca = cor_raca;
-      }
+      if (cor_raca !== null) params.cor_raca = cor_raca;
+      if (sexo !== null)     params.sexo = sexo;
     }
+    // especie aplica-se apenas ao nível GEOLOCALIZACAO (tiles_cnefe)
+    if (especie !== null) params.especie = especie;
     return params;
   },
 }));

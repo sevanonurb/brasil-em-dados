@@ -23,6 +23,7 @@ DECLARE
     v_ano       INTEGER  := COALESCE((query_params->>'ano')::INTEGER, 2023);
     v_cid10     CHAR(1)  := query_params->>'cid10_capitulo';
     v_cor_raca  SMALLINT := (query_params->>'cor_raca')::SMALLINT;
+    v_sexo      CHAR(1)  := NULLIF(query_params->>'sexo', '');
     v_faixa_min SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
     v_faixa_max SMALLINT := COALESCE((query_params->>'faixa_etaria_max')::SMALLINT, 17);
 BEGIN
@@ -34,12 +35,20 @@ BEGIN
             SELECT s.cod_uf, COUNT(*)::FLOAT8 AS contagem
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
               AND (
-                  (v_metrica = 'taxa_mortalidade' AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade'         AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
                   OR
-                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  (v_metrica = 'taxa_homicidio'           AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  OR
+                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
+                  OR
+                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
+                  OR
+                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
+              AND (v_sexo IS NULL OR s.sexo = v_sexo)
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_uf
@@ -73,7 +82,8 @@ BEGIN
             econ.pib_estadual,
             econ.receita_estadual_total,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             -- Ambos os filtros: estimativa proporcional (raça × faixa / total)
@@ -94,6 +104,10 @@ BEGIN
                     econ.pib_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'receita_per_capita' THEN
                     econ.receita_estadual_total / NULLIF(u.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_saude_per_capita' THEN
+                    econ.despesa_saude_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_educacao_per_capita' THEN
+                    econ.despesa_educacao_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     u.populacao_2022::FLOAT8 / NULLIF(u.area_km2::FLOAT8, 0)
                 ELSE NULL
@@ -111,9 +125,11 @@ BEGIN
         LEFT JOIN (
             -- Agrega dados econômicos por UF para o ano selecionado
             SELECT gm.cod_uf,
-                   SUM(e.pib)::FLOAT8               AS pib_estadual,
-                   SUM(e.receita_total)::FLOAT8      AS receita_estadual_total,
-                   SUM(e.transferencias_sus)::FLOAT8 AS transferencias_sus_total
+                   SUM(e.pib)::FLOAT8                 AS pib_estadual,
+                   SUM(e.receita_total)::FLOAT8        AS receita_estadual_total,
+                   SUM(e.transferencias_sus)::FLOAT8   AS transferencias_sus_total,
+                   SUM(e.despesa_saude)::FLOAT8        AS despesa_saude_estadual,
+                   SUM(e.despesa_educacao)::FLOAT8     AS despesa_educacao_estadual
             FROM economia.siconfi_municipios e
             JOIN geo.municipios gm ON gm.cod_ibge_7 = e.cod_municipio
             WHERE e.ano = v_ano
@@ -152,6 +168,7 @@ DECLARE
     v_metrica   TEXT     := COALESCE(query_params->>'metrica', 'taxa_mortalidade');
     v_faixa_min SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
     v_faixa_max SMALLINT := COALESCE((query_params->>'faixa_etaria_max')::SMALLINT, 17);
+    v_sexo      CHAR(1)  := NULLIF(query_params->>'sexo', '');
 BEGIN
     -- Validações de domínio
     IF v_cod_uf IS NOT NULL AND v_cod_uf NOT BETWEEN 11 AND 53 THEN
@@ -171,12 +188,20 @@ BEGIN
             SELECT s.cod_municipio, COUNT(*)::FLOAT8 AS contagem
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
               AND (
-                  (v_metrica = 'taxa_mortalidade' AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade'           AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
                   OR
-                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  (v_metrica = 'taxa_homicidio'             AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  OR
+                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
+                  OR
+                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
+                  OR
+                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
+              AND (v_sexo IS NULL OR s.sexo = v_sexo)
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
@@ -201,8 +226,11 @@ BEGIN
             m.nome                              AS nome_municipio,
             m.populacao_2022,
             e.transferencias_sus::FLOAT8        AS transferencias_sus,
+            e.despesa_saude::FLOAT8             AS despesa_saude,
+            e.despesa_educacao::FLOAT8          AS despesa_educacao,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
@@ -224,6 +252,10 @@ BEGIN
                     e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'receita_per_capita' THEN
                     e.receita_total::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_saude_per_capita' THEN
+                    e.despesa_saude::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_educacao_per_capita' THEN
+                    e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     m.populacao_2022::FLOAT8 / NULLIF(m.area_km2::FLOAT8, 0)
                 ELSE NULL
@@ -275,6 +307,7 @@ DECLARE
     v_metrica     TEXT     := COALESCE(query_params->>'metrica', 'taxa_mortalidade');
     v_faixa_min   SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
     v_faixa_max   SMALLINT := COALESCE((query_params->>'faixa_etaria_max')::SMALLINT, 17);
+    v_sexo        CHAR(1)  := NULLIF(query_params->>'sexo', '');
 BEGIN
     -- Zooms baixos (< 9): centroids amostrados coloridos pelo indicador municipal.
     -- Usa api.indicadores_municipio (materializado) para evitar reprocessar SIM inteira.
@@ -288,11 +321,16 @@ BEGIN
                 sc.cod_municipio,
                 sc.populacao_total,
                 CASE v_metrica
-                    WHEN 'taxa_mortalidade'   THEN im.taxa_mortalidade_2023::FLOAT8
-                    WHEN 'taxa_homicidio'     THEN im.taxa_homicidio_2023::FLOAT8
-                    WHEN 'pib_per_capita'     THEN im.pib_per_capita_2022::FLOAT8
-                    WHEN 'receita_per_capita' THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
-                    WHEN 'densidade_pop'      THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                    WHEN 'taxa_mortalidade'            THEN im.taxa_mortalidade_2023::FLOAT8
+                    WHEN 'taxa_homicidio'              THEN im.taxa_homicidio_2023::FLOAT8
+                    WHEN 'mortalidade_cardiovascular'  THEN im.mortalidade_cardiovascular_2023::FLOAT8
+                    WHEN 'mortalidade_cancer'          THEN im.mortalidade_cancer_2023::FLOAT8
+                    WHEN 'mortalidade_respiratoria'    THEN im.mortalidade_respiratoria_2023::FLOAT8
+                    WHEN 'pib_per_capita'              THEN im.pib_per_capita_2022::FLOAT8
+                    WHEN 'receita_per_capita'          THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
+                    WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
+                    WHEN 'despesa_educacao_per_capita' THEN im.despesa_educacao_per_capita_2022::FLOAT8
+                    WHEN 'densidade_pop'               THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
                     ELSE NULL
                 END AS valor_metrica,
                 ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
@@ -330,12 +368,20 @@ BEGIN
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
               AND s.cod_municipio IN (SELECT mt.cod_municipio / 10 FROM muns_no_tile mt)
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
               AND (
-                  (v_metrica = 'taxa_mortalidade' AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade'           AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
                   OR
-                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  (v_metrica = 'taxa_homicidio'             AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  OR
+                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
+                  OR
+                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
+                  OR
+                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
               )
+              AND (v_sexo IS NULL OR s.sexo = v_sexo)
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
@@ -361,7 +407,8 @@ BEGIN
             sc.domicilios_total,
             sc.populacao_total,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
+                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
@@ -379,6 +426,10 @@ BEGIN
                     e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'receita_per_capita' THEN
                     e.receita_total::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_saude_per_capita' THEN
+                    e.despesa_saude::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                WHEN v_metrica = 'despesa_educacao_per_capita' THEN
+                    e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 -- densidade_pop: dado genuíno por setor censitário (Censo 2022)
                 WHEN v_metrica = 'densidade_pop' THEN
                     (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))

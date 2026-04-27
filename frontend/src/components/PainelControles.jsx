@@ -7,6 +7,7 @@
 
 import React, { useState } from "react";
 import { NIVEL_METADATA } from "../layers/semantic_zoom.js";
+import { METRICAS_SAUDE } from "../filters/cross_filter.js";
 import "./RangeSlider.css";
 
 // 27 UFs em ordem alfabética de sigla
@@ -41,11 +42,20 @@ const UFS_BRASIL = [
 ];
 
 const METRICAS = [
-  { value: "taxa_mortalidade",  label: "Taxa de mortalidade" },
-  { value: "taxa_homicidio",    label: "Taxa de homicídio" },
-  { value: "pib_per_capita",    label: "PIB per capita" },
-  { value: "receita_per_capita",label: "Receita municipal per capita" },
-  { value: "densidade_pop",     label: "Densidade demográfica" },
+  // Saúde geral
+  { value: "taxa_mortalidade",            label: "Taxa de mortalidade" },
+  { value: "taxa_homicidio",              label: "Taxa de homicídio" },
+  // Saúde — causas específicas (CID fixo)
+  { value: "mortalidade_cardiovascular",  label: "Mortalidade cardiovascular" },
+  { value: "mortalidade_cancer",          label: "Mortalidade por câncer" },
+  { value: "mortalidade_respiratoria",    label: "Mortalidade respiratória" },
+  // Economia
+  { value: "pib_per_capita",              label: "PIB per capita" },
+  { value: "receita_per_capita",          label: "Receita municipal per capita" },
+  { value: "despesa_saude_per_capita",    label: "Gasto em saúde per capita" },
+  { value: "despesa_educacao_per_capita", label: "Gasto em educação per capita" },
+  // Demográfico
+  { value: "densidade_pop",               label: "Densidade demográfica" },
 ];
 
 const CID10_CAPITULOS = [
@@ -64,6 +74,12 @@ const COR_RACA_OPCOES = [
   { value: 2,     label: "Preta" },
   { value: 4,     label: "Parda" },
   { value: 5,     label: "Indígena" },
+];
+
+const SEXO_OPCOES = [
+  { value: null, label: "Todos" },
+  { value: "M",  label: "Masculino" },
+  { value: "F",  label: "Feminino" },
 ];
 
 const NIVEIS = ["NACIONAL", "ESTADUAL", "MUNICIPAL", "GEOLOCALIZACAO"];
@@ -107,6 +123,8 @@ export function PainelControles({
   onUFChange,
   onFaixaEtariaChange,
   onCorRacaChange,
+  onSexoChange,
+  onEspecieChange,
   onNivelChange,
 }) {
   const [aberto, setAberto] = useState(true);
@@ -292,8 +310,30 @@ export function PainelControles({
             </div>
           )}
 
-          {/* Cor/Raça e Faixa Etária — apenas para métricas de saúde com microdados */}
-          {["taxa_mortalidade", "taxa_homicidio"].includes(filtros.metrica) && (<>
+          {/* Filtros demográficos — para todas as métricas de saúde com microdados */}
+          {METRICAS_SAUDE.includes(filtros.metrica) && (<>
+
+            {/* Sexo */}
+            <div>
+              <label style={{ fontSize: 11, color: "#a0aec0", display: "block", marginBottom: 4 }}>
+                SEXO
+              </label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {SEXO_OPCOES.map(op => (
+                  <button
+                    key={String(op.value)}
+                    onClick={() => onSexoChange(op.value)}
+                    style={{
+                      ...chipStyle,
+                      background: filtros.sexo === op.value ? "#4299e1" : "#2d3748",
+                      color: filtros.sexo === op.value ? "#fff" : "#a0aec0",
+                    }}
+                  >
+                    {op.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Cor/Raça */}
             <div>
@@ -330,6 +370,30 @@ export function PainelControles({
             </div>
 
           </>)}
+
+          {/* Tipo de endereço — apenas no nível GEOLOCALIZACAO */}
+          {nivelAtual === "GEOLOCALIZACAO" && (
+            <div>
+              <label style={{ fontSize: 11, color: "#a0aec0", display: "block", marginBottom: 4 }}>
+                TIPO DE ENDEREÇO
+              </label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[{ v: null, l: "Todos" }, { v: 1, l: "Residencial" }, { v: 2, l: "Coletivo" }].map(op => (
+                  <button
+                    key={String(op.v)}
+                    onClick={() => onEspecieChange(op.v)}
+                    style={{
+                      ...chipStyle,
+                      background: filtros.especie === op.v ? "#4299e1" : "#2d3748",
+                      color: filtros.especie === op.v ? "#fff" : "#a0aec0",
+                    }}
+                  >
+                    {op.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Reset */}
           <button

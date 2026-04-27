@@ -11,18 +11,32 @@
 
 
 const METRICA_LABEL = {
-  taxa_mortalidade:   "Taxa de mortalidade",
-  taxa_homicidio:     "Taxa de homicídio",
-  pib_per_capita:     "PIB per capita",
-  receita_per_capita: "Receita municipal per capita",
+  taxa_mortalidade:            "Taxa de mortalidade",
+  taxa_homicidio:              "Taxa de homicídio",
+  mortalidade_cardiovascular:  "Mortalidade cardiovascular",
+  mortalidade_cancer:          "Mortalidade por câncer",
+  mortalidade_respiratoria:    "Mortalidade respiratória",
+  pib_per_capita:              "PIB per capita",
+  receita_per_capita:          "Receita municipal per capita",
+  despesa_saude_per_capita:    "Gasto em saúde per capita",
+  despesa_educacao_per_capita: "Gasto em educação per capita",
+  densidade_pop:               "Densidade demográfica",
 };
+
+const METRICAS_REAIS = new Set([
+  "pib_per_capita", "receita_per_capita",
+  "despesa_saude_per_capita", "despesa_educacao_per_capita",
+]);
 
 function formatarMetrica(valor, metrica) {
   if (valor == null || valor === "") return null;
   const n = typeof valor === "number" ? valor : Number(valor);
   if (!isFinite(n)) return null;
-  if (metrica === "pib_per_capita" || metrica === "receita_per_capita") {
+  if (METRICAS_REAIS.has(metrica)) {
     return { texto: "R$\u00a0" + n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: "" };
+  }
+  if (metrica === "densidade_pop") {
+    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0hab/km²" };
   }
   return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0/100k hab." };
 }
@@ -113,7 +127,11 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
               <Metrica label="Transf. SUS" valor={p.transferencias_sus_total} prefixo="R$\u00a0" decimais={0} />
             </>
           ) : (
-            <Metrica label="Transf. SUS" valor={p.transferencias_sus} prefixo="R$\u00a0" decimais={0} />
+            <>
+              <Metrica label="Transf. SUS" valor={p.transferencias_sus} prefixo="R$\u00a0" decimais={0} />
+              <Metrica label="Gasto em saúde" valor={p.despesa_saude} prefixo="R$\u00a0" decimais={0} />
+              <Metrica label="Gasto em educação" valor={p.despesa_educacao} prefixo="R$\u00a0" decimais={0} />
+            </>
           )}
         </Secao>
 
