@@ -26,6 +26,17 @@ FALLBACK = {
     "despesa_saude_per_capita":    [2022],
     "despesa_educacao_per_capita": [2022],
     "densidade_pop":               [2022],
+    # Saneamento — Censo 2022 (estático)
+    "acesso_agua":                 [2022],
+    "acesso_esgoto":               [2022],
+    "coleta_lixo":                 [2022],
+    # Saúde — SINASC e CNES
+    "taxa_natalidade":             [2023],
+    "leitos_sus_por_1k":           [2023],
+    "medicos_por_10k":             [2023],
+    # Educação — IDEB (bienal)
+    "ideb_anos_iniciais":          [2023],
+    "ideb_anos_finais":            [2023],
 }
 
 
@@ -42,17 +53,43 @@ def query_anos():
                 "SELECT DISTINCT ano FROM economia.siconfi_municipios ORDER BY ano DESC"
             )
             anos_ec = [r[0] for r in cur.fetchall()]
+
+            cur.execute(
+                "SELECT DISTINCT ano FROM saude.sinasc_municipios ORDER BY ano DESC"
+            )
+            anos_sinasc = [r[0] for r in cur.fetchall()]
+
+            cur.execute(
+                "SELECT DISTINCT ano FROM saude.cnes_municipios ORDER BY ano DESC"
+            )
+            anos_cnes = [r[0] for r in cur.fetchall()]
+
+            cur.execute(
+                "SELECT DISTINCT ano FROM educacao.ideb_municipios ORDER BY ano DESC"
+            )
+            anos_ideb = [r[0] for r in cur.fetchall()]
     finally:
         conn.close()
 
     return {
-        "taxa_mortalidade":            anos_sim or FALLBACK["taxa_mortalidade"],
-        "taxa_homicidio":              anos_sim or FALLBACK["taxa_homicidio"],
-        "pib_per_capita":              anos_ec  or FALLBACK["pib_per_capita"],
-        "receita_per_capita":          anos_ec  or FALLBACK["receita_per_capita"],
-        "despesa_saude_per_capita":    anos_ec  or FALLBACK["despesa_saude_per_capita"],
-        "despesa_educacao_per_capita": anos_ec  or FALLBACK["despesa_educacao_per_capita"],
+        "taxa_mortalidade":            anos_sim    or FALLBACK["taxa_mortalidade"],
+        "taxa_homicidio":              anos_sim    or FALLBACK["taxa_homicidio"],
+        "pib_per_capita":              anos_ec     or FALLBACK["pib_per_capita"],
+        "receita_per_capita":          anos_ec     or FALLBACK["receita_per_capita"],
+        "despesa_saude_per_capita":    anos_ec     or FALLBACK["despesa_saude_per_capita"],
+        "despesa_educacao_per_capita": anos_ec     or FALLBACK["despesa_educacao_per_capita"],
         "densidade_pop":               [2022],
+        # Saneamento — Censo 2022 (estático)
+        "acesso_agua":                 [2022],
+        "acesso_esgoto":               [2022],
+        "coleta_lixo":                 [2022],
+        # Saúde — SINASC e CNES
+        "taxa_natalidade":             anos_sinasc or FALLBACK["taxa_natalidade"],
+        "leitos_sus_por_1k":           anos_cnes   or FALLBACK["leitos_sus_por_1k"],
+        "medicos_por_10k":             anos_cnes   or FALLBACK["medicos_por_10k"],
+        # Educação — IDEB (bienal)
+        "ideb_anos_iniciais":          anos_ideb   or FALLBACK["ideb_anos_iniciais"],
+        "ideb_anos_finais":            anos_ideb   or FALLBACK["ideb_anos_finais"],
     }
 
 

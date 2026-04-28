@@ -21,6 +21,17 @@ export const ANOS_POR_METRICA_DEFAULT = {
   despesa_saude_per_capita:    [2022],
   despesa_educacao_per_capita: [2022],
   densidade_pop:               [2022],
+  // Saneamento — Censo 2022 (estático)
+  acesso_agua:                 [2022],
+  acesso_esgoto:               [2022],
+  coleta_lixo:                 [2022],
+  // Saúde — SINASC e CNES
+  taxa_natalidade:             [2023],
+  leitos_sus_por_1k:           [2023],
+  medicos_por_10k:             [2023],
+  // Educação — IDEB (bienal)
+  ideb_anos_iniciais:          [2023],
+  ideb_anos_finais:            [2023],
 };
 
 // Re-exporta para compatibilidade com imports existentes

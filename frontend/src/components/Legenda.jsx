@@ -13,6 +13,14 @@ const METRICAS_LABELS = {
   despesa_saude_per_capita:    "Gasto em saúde per capita",
   despesa_educacao_per_capita: "Gasto em educação per capita",
   densidade_pop:               "Densidade demográfica (hab/km²)",
+  acesso_agua:                 "Acesso à água encanada (%)",
+  acesso_esgoto:               "Acesso à rede de esgoto (%)",
+  coleta_lixo:                 "Coleta de lixo (%)",
+  taxa_natalidade:             "Taxa de natalidade (nasc./1k hab.)",
+  leitos_sus_por_1k:           "Leitos SUS (por 1k hab.)",
+  medicos_por_10k:             "Médicos (por 10k hab.)",
+  ideb_anos_iniciais:          "IDEB — anos iniciais (0–10)",
+  ideb_anos_finais:            "IDEB — anos finais (0–10)",
 };
 
 const METRICAS_REAIS = new Set([
@@ -20,21 +28,38 @@ const METRICAS_REAIS = new Set([
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
 ]);
 
+const METRICAS_PERCENT = new Set(["acesso_agua", "acesso_esgoto", "coleta_lixo"]);
+
 function formatarValor(v, metrica) {
   if (v == null) return "—";
   const n = Number(v);
   if (METRICAS_REAIS.has(metrica)) {
     return "R$\u00a0" + n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
   }
+  if (METRICAS_PERCENT.has(metrica)) {
+    return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + "%";
+  }
+  if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+  if (metrica === "leitos_sus_por_1k") {
+    return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  }
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
 
 const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio"]);
+const METRICAS_MELHOR_ALTO = new Set([
+  "acesso_agua", "acesso_esgoto", "coleta_lixo",
+  "taxa_natalidade", "leitos_sus_por_1k", "medicos_por_10k",
+  "ideb_anos_iniciais", "ideb_anos_finais",
+]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {
   const label = METRICAS_LABELS[metrica] ?? metrica;
   const legendaMeio = METRICAS_SAUDE_SET.has(metrica) ? "↑ maior risco"
     : metrica === "densidade_pop" ? "↑ mais denso"
+    : METRICAS_MELHOR_ALTO.has(metrica) ? "↑ melhor"
     : "↑ maior valor";
 
   return (

@@ -273,3 +273,62 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_indicadores_uf_pk
     ON api.indicadores_uf (cod_uf);
 CREATE INDEX IF NOT EXISTS idx_indicadores_uf_geom
     ON api.indicadores_uf USING GIST (geom);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SCHEMA: Educação
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE SCHEMA IF NOT EXISTS educacao;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABELA: Saneamento básico — Censo IBGE 2022 (estático, sem filtro de ano)
+-- Fonte: IBGE SIDRA tabelas 6803 (água), 6805 (esgoto), 6892 (lixo)
+-- Código IBGE 7 dígitos (N6 = município)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS censo.domicilios_municipio (
+    cod_municipio    INTEGER PRIMARY KEY,  -- 7 dígitos IBGE
+    total_domicilios INTEGER,
+    com_agua_rede    INTEGER,   -- ligados à rede geral de abastecimento
+    com_esgoto_rede  INTEGER,   -- com esgotamento sanitário por rede geral
+    com_coleta_lixo  INTEGER    -- com coleta de lixo por serviço de limpeza
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABELA: Nascidos vivos — SINASC/DataSUS (por município-ano)
+-- Fonte: PySUS SINASC grupo "DN"
+-- CODMUNRES: 6 dígitos DataSUS — join com geo.municipios via cod_ibge_7 / 10
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saude.sinasc_municipios (
+    cod_municipio  INTEGER  NOT NULL,  -- 6 dígitos DataSUS
+    cod_uf         SMALLINT NOT NULL,
+    ano            SMALLINT NOT NULL,
+    nascidos_vivos INTEGER,
+    PRIMARY KEY (cod_municipio, ano)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABELA: Infraestrutura de saúde — CNES/DataSUS (por município-ano)
+-- Fonte: PySUS CNES LT (leitos) + PF (profissionais)
+-- CODUFMUN: 6 dígitos DataSUS — join com geo.municipios via cod_ibge_7 / 10
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS saude.cnes_municipios (
+    cod_municipio  INTEGER  NOT NULL,  -- 6 dígitos DataSUS
+    cod_uf         SMALLINT NOT NULL,
+    ano            SMALLINT NOT NULL,
+    leitos_sus     INTEGER,  -- leitos SUS (QT_SUS do grupo LT)
+    leitos_total   INTEGER,  -- leitos totais (QT_EXIST do grupo LT)
+    medicos        INTEGER,  -- médicos (CBO 22xx) do grupo PF
+    PRIMARY KEY (cod_municipio, ano)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABELA: IDEB — INEP (por município-ano, anos ímpares)
+-- Fonte: planilhas INEP download
+-- Código IBGE 7 dígitos
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS educacao.ideb_municipios (
+    cod_municipio       INTEGER NOT NULL,  -- 7 dígitos IBGE
+    ano                 SMALLINT NOT NULL,
+    ideb_anos_iniciais  FLOAT,  -- IDEB anos iniciais do ensino fundamental (0-10)
+    ideb_anos_finais    FLOAT,  -- IDEB anos finais do ensino fundamental (0-10)
+    PRIMARY KEY (cod_municipio, ano)
+);

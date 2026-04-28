@@ -62,13 +62,55 @@ const METRICAS_RANGES = {
     MUNICIPAL: { min: 0, max: 5000 },
   },
   // Densidade demográfica (hab/km²) — escala própria de setor censitário
-  // UF: P90=178 (SP), max=486 (DF) → cap 400
-  // Município: P50=24, P90=134, P99=2160 → cap 400 mostra variação real
-  // Setor: P50=3408, P90=18839 → cap 20k
   densidade_pop: {
-    NACIONAL: { min: 0, max: 400 },    // UF: 2–486 hab/km²
-    ESTADUAL: { min: 0, max: 400 },    // Município: P90=134, max=13k
-    MUNICIPAL: { min: 0, max: 20000 }, // Setor censitário (Censo 2022)
+    NACIONAL: { min: 0, max: 400 },
+    ESTADUAL: { min: 0, max: 400 },
+    MUNICIPAL: { min: 0, max: 20000 },
+  },
+  // Saneamento — Censo 2022 — percentual de domicílios (0–100%)
+  acesso_agua: {
+    NACIONAL:  { min: 50, max: 100 },
+    ESTADUAL:  { min: 20, max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  acesso_esgoto: {
+    NACIONAL:  { min: 0, max: 100 },
+    ESTADUAL:  { min: 0, max: 100 },
+    MUNICIPAL: { min: 0, max: 100 },
+  },
+  coleta_lixo: {
+    NACIONAL:  { min: 40, max: 100 },
+    ESTADUAL:  { min: 20, max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  // Saúde — SINASC: nascidos vivos por 1000 hab.
+  taxa_natalidade: {
+    NACIONAL:  { min: 8,  max: 25 },
+    ESTADUAL:  { min: 5,  max: 35 },
+    MUNICIPAL: { min: 0,  max: 50 },
+  },
+  // Saúde — CNES: leitos SUS por 1000 hab. (~1–3 nos municípios com hospital)
+  leitos_sus_por_1k: {
+    NACIONAL:  { min: 0, max: 3  },
+    ESTADUAL:  { min: 0, max: 10 },
+    MUNICIPAL: { min: 0, max: 20 },
+  },
+  // Saúde — CNES: médicos por 10.000 hab. (~2 interior, ~20 capitais)
+  medicos_por_10k: {
+    NACIONAL:  { min: 0, max: 30  },
+    ESTADUAL:  { min: 0, max: 80  },
+    MUNICIPAL: { min: 0, max: 150 },
+  },
+  // Educação — IDEB: escala 0–10 (meta nacional ~6)
+  ideb_anos_iniciais: {
+    NACIONAL:  { min: 3, max: 9 },
+    ESTADUAL:  { min: 2, max: 9 },
+    MUNICIPAL: { min: 1, max: 9 },
+  },
+  ideb_anos_finais: {
+    NACIONAL:  { min: 3, max: 9 },
+    ESTADUAL:  { min: 2, max: 9 },
+    MUNICIPAL: { min: 1, max: 9 },
   },
 };
 
@@ -124,12 +166,22 @@ function makeTooltip(metrica, cid10) {
     despesa_saude_per_capita:    "Gasto em saúde",
     despesa_educacao_per_capita: "Gasto em educação",
     densidade_pop:               "Densidade demográfica",
+    acesso_agua:                 "Acesso à água",
+    acesso_esgoto:               "Acesso ao esgoto",
+    coleta_lixo:                 "Coleta de lixo",
+    taxa_natalidade:             "Taxa de natalidade",
+    leitos_sus_por_1k:           "Leitos SUS",
+    medicos_por_10k:             "Médicos",
+    ideb_anos_iniciais:          "IDEB anos iniciais",
+    ideb_anos_finais:            "IDEB anos finais",
   };
 
   const METRICAS_REAIS = new Set([
     "pib_per_capita", "receita_per_capita",
     "despesa_saude_per_capita", "despesa_educacao_per_capita",
   ]);
+
+  const METRICAS_PERCENT = new Set(["acesso_agua", "acesso_esgoto", "coleta_lixo"]);
 
   return ({ object }) => {
     if (!object?.properties) return null;
@@ -149,6 +201,16 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>R$\u00a0${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b>`;
       } else if (metrica === "densidade_pop") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> hab/km²`;
+      } else if (METRICAS_PERCENT.has(metrica)) {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>%`;
+      } else if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b>`;
+      } else if (metrica === "leitos_sus_por_1k") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
+      } else if (metrica === "medicos_por_10k") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
+      } else if (metrica === "taxa_natalidade") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k hab.`;
       } else {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
       }

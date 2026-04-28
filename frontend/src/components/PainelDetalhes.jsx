@@ -23,12 +23,22 @@ const METRICA_LABEL = {
   despesa_saude_per_capita:    "Gasto em saúde per capita",
   despesa_educacao_per_capita: "Gasto em educação per capita",
   densidade_pop:               "Densidade demográfica",
+  acesso_agua:                 "Água encanada",
+  acesso_esgoto:               "Esgoto (rede)",
+  coleta_lixo:                 "Coleta de lixo",
+  taxa_natalidade:             "Taxa de natalidade",
+  leitos_sus_por_1k:           "Leitos SUS",
+  medicos_por_10k:             "Médicos",
+  ideb_anos_iniciais:          "IDEB anos iniciais",
+  ideb_anos_finais:            "IDEB anos finais",
 };
 
 const METRICAS_REAIS = new Set([
   "pib_per_capita", "receita_per_capita",
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
 ]);
+
+const METRICAS_PERCENT = new Set(["acesso_agua", "acesso_esgoto", "coleta_lixo"]);
 
 function formatarMetrica(valor, metrica) {
   if (valor == null || valor === "") return null;
@@ -39,6 +49,21 @@ function formatarMetrica(valor, metrica) {
   }
   if (metrica === "densidade_pop") {
     return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0hab/km²" };
+  }
+  if (METRICAS_PERCENT.has(metrica)) {
+    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "%" };
+  }
+  if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
+    return { texto: n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), unidade: "\u00a0/ 10" };
+  }
+  if (metrica === "leitos_sus_por_1k") {
+    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }), unidade: "\u00a0/1k hab." };
+  }
+  if (metrica === "taxa_natalidade") {
+    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0/1k hab." };
+  }
+  if (metrica === "medicos_por_10k") {
+    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0/10k hab." };
   }
   return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "\u00a0/100k hab." };
 }

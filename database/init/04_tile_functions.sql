@@ -106,6 +106,22 @@ BEGIN
                     econ.despesa_educacao_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     u.populacao_2022::FLOAT8 / NULLIF(u.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'acesso_agua' THEN
+                    san.com_agua_rede_total / NULLIF(san.total_domicilios_total, 0) * 100
+                WHEN v_metrica = 'acesso_esgoto' THEN
+                    san.com_esgoto_rede_total / NULLIF(san.total_domicilios_total, 0) * 100
+                WHEN v_metrica = 'coleta_lixo' THEN
+                    san.com_coleta_lixo_total / NULLIF(san.total_domicilios_total, 0) * 100
+                WHEN v_metrica = 'taxa_natalidade' THEN
+                    sinasc_uf.nascidos_vivos_total / NULLIF(u.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'leitos_sus_por_1k' THEN
+                    cnes_uf.leitos_sus_total / NULLIF(u.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'medicos_por_10k' THEN
+                    cnes_uf.medicos_total / NULLIF(u.populacao_2022::FLOAT8, 0) * 10000
+                WHEN v_metrica = 'ideb_anos_iniciais' THEN
+                    ideb_uf.ideb_anos_iniciais_media
+                WHEN v_metrica = 'ideb_anos_finais' THEN
+                    ideb_uf.ideb_anos_finais_media
                 ELSE NULL
             END AS valor_metrica,
             ST_AsMVTGeom(
@@ -131,6 +147,45 @@ BEGIN
             WHERE e.ano = v_ano
             GROUP BY gm.cod_uf
         ) econ ON econ.cod_uf = u.cod_uf
+        LEFT JOIN (
+            -- Saneamento: Censo IBGE 2022 (estático — sem filtro de ano)
+            SELECT gm.cod_uf,
+                   SUM(dm.com_agua_rede)::FLOAT8    AS com_agua_rede_total,
+                   SUM(dm.com_esgoto_rede)::FLOAT8  AS com_esgoto_rede_total,
+                   SUM(dm.com_coleta_lixo)::FLOAT8  AS com_coleta_lixo_total,
+                   SUM(dm.total_domicilios)::FLOAT8 AS total_domicilios_total
+            FROM censo.domicilios_municipio dm
+            JOIN geo.municipios gm ON gm.cod_ibge_7 = dm.cod_municipio
+            GROUP BY gm.cod_uf
+        ) san ON san.cod_uf = u.cod_uf
+        LEFT JOIN (
+            -- SINASC: nascidos vivos por UF para o ano selecionado
+            SELECT gm.cod_uf, SUM(sn.nascidos_vivos)::FLOAT8 AS nascidos_vivos_total
+            FROM saude.sinasc_municipios sn
+            JOIN geo.municipios gm ON gm.cod_ibge_7 / 10 = sn.cod_municipio
+            WHERE sn.ano = v_ano
+            GROUP BY gm.cod_uf
+        ) sinasc_uf ON sinasc_uf.cod_uf = u.cod_uf
+        LEFT JOIN (
+            -- CNES: leitos e médicos por UF para o ano selecionado
+            SELECT gm.cod_uf,
+                   SUM(cn.leitos_sus)::FLOAT8 AS leitos_sus_total,
+                   SUM(cn.medicos)::FLOAT8    AS medicos_total
+            FROM saude.cnes_municipios cn
+            JOIN geo.municipios gm ON gm.cod_ibge_7 / 10 = cn.cod_municipio
+            WHERE cn.ano = v_ano
+            GROUP BY gm.cod_uf
+        ) cnes_uf ON cnes_uf.cod_uf = u.cod_uf
+        LEFT JOIN (
+            -- IDEB: média municipal por UF para o ano selecionado
+            SELECT gm.cod_uf,
+                   AVG(ideb.ideb_anos_iniciais)::FLOAT8 AS ideb_anos_iniciais_media,
+                   AVG(ideb.ideb_anos_finais)::FLOAT8   AS ideb_anos_finais_media
+            FROM educacao.ideb_municipios ideb
+            JOIN geo.municipios gm ON gm.cod_ibge_7 = ideb.cod_municipio
+            WHERE ideb.ano = v_ano
+            GROUP BY gm.cod_uf
+        ) ideb_uf ON ideb_uf.cod_uf = u.cod_uf
         LEFT JOIN mortalidade_agg ma ON ma.cod_uf = u.cod_uf
         LEFT JOIN pop_raca pr        ON pr.cod_uf = u.cod_uf
         LEFT JOIN pop_faixa pf       ON pf.cod_uf = u.cod_uf
@@ -250,6 +305,22 @@ BEGIN
                     e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     m.populacao_2022::FLOAT8 / NULLIF(m.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'acesso_agua' THEN
+                    dm.com_agua_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'acesso_esgoto' THEN
+                    dm.com_esgoto_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'coleta_lixo' THEN
+                    dm.com_coleta_lixo::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'taxa_natalidade' THEN
+                    sn.nascidos_vivos::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'leitos_sus_por_1k' THEN
+                    cn.leitos_sus::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'medicos_por_10k' THEN
+                    cn.medicos::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 10000
+                WHEN v_metrica = 'ideb_anos_iniciais' THEN
+                    ideb.ideb_anos_iniciais::FLOAT8
+                WHEN v_metrica = 'ideb_anos_finais' THEN
+                    ideb.ideb_anos_finais::FLOAT8
                 ELSE NULL
             END AS valor_metrica,
             ST_AsMVTGeom(
@@ -264,6 +335,13 @@ BEGIN
         FROM geo.municipios m
         LEFT JOIN economia.siconfi_municipios e
             ON e.cod_municipio = m.cod_ibge_7 AND e.ano = v_ano
+        LEFT JOIN censo.domicilios_municipio dm ON dm.cod_municipio = m.cod_ibge_7
+        LEFT JOIN saude.sinasc_municipios sn
+            ON sn.cod_municipio = m.cod_ibge_7 / 10 AND sn.ano = v_ano
+        LEFT JOIN saude.cnes_municipios cn
+            ON cn.cod_municipio = m.cod_ibge_7 / 10 AND cn.ano = v_ano
+        LEFT JOIN educacao.ideb_municipios ideb
+            ON ideb.cod_municipio = m.cod_ibge_7 AND ideb.ano = v_ano
         LEFT JOIN mortalidade_agg ma ON ma.cod_municipio = m.cod_ibge_7 / 10
         LEFT JOIN pop_raca pr        ON pr.cod_municipio = m.cod_ibge_7
         LEFT JOIN pop_faixa pf       ON pf.cod_municipio = m.cod_ibge_7
@@ -418,6 +496,22 @@ BEGIN
                 -- densidade_pop: dado genuíno por setor censitário (Censo 2022)
                 WHEN v_metrica = 'densidade_pop' THEN
                     (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                WHEN v_metrica = 'acesso_agua' THEN
+                    dm.com_agua_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'acesso_esgoto' THEN
+                    dm.com_esgoto_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'coleta_lixo' THEN
+                    dm.com_coleta_lixo::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
+                WHEN v_metrica = 'taxa_natalidade' THEN
+                    sn.nascidos_vivos::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'leitos_sus_por_1k' THEN
+                    cn.leitos_sus::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 1000
+                WHEN v_metrica = 'medicos_por_10k' THEN
+                    cn.medicos::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0) * 10000
+                WHEN v_metrica = 'ideb_anos_iniciais' THEN
+                    ideb.ideb_anos_iniciais::FLOAT8
+                WHEN v_metrica = 'ideb_anos_finais' THEN
+                    ideb.ideb_anos_finais::FLOAT8
                 ELSE NULL
             END AS valor_metrica,
             -- geom_3857_simplified: pré-projetada e simplificada (~30m) para zoom 9-12
@@ -428,6 +522,13 @@ BEGIN
         JOIN geo.municipios m ON m.cod_ibge_7 = sc.cod_municipio
         LEFT JOIN economia.siconfi_municipios e
             ON e.cod_municipio = sc.cod_municipio AND e.ano = v_ano
+        LEFT JOIN censo.domicilios_municipio dm ON dm.cod_municipio = sc.cod_municipio
+        LEFT JOIN saude.sinasc_municipios sn
+            ON sn.cod_municipio = sc.cod_municipio / 10 AND sn.ano = v_ano
+        LEFT JOIN saude.cnes_municipios cn
+            ON cn.cod_municipio = sc.cod_municipio / 10 AND cn.ano = v_ano
+        LEFT JOIN educacao.ideb_municipios ideb
+            ON ideb.cod_municipio = sc.cod_municipio AND ideb.ano = v_ano
         -- Mortalidade: 6-dígitos (sim) ← 7-dígitos (setor) / 10
         LEFT JOIN mortalidade_agg ma ON ma.cod_municipio = sc.cod_municipio / 10
         LEFT JOIN pop_raca pr        ON pr.cod_municipio = sc.cod_municipio

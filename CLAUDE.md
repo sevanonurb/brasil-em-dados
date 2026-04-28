@@ -195,11 +195,30 @@ for col in batch.select_dtypes(include=["Int8","Int16","Int32","Int64"]).columns
     batch[col] = batch[col].astype(object).where(batch[col].notna(), None)
 ```
 
+### Active metrics
+
+The panel currently exposes 7 metrics (reduced from 10 — 3 CID-specific metrics were removed as duplicates of `taxa_mortalidade + CID dropdown`):
+
+| Metric key | Category | Applies demographic filters |
+|---|---|---|
+| `taxa_mortalidade` | Health | sexo, cor_raca, faixa_etaria, cid10 |
+| `taxa_homicidio` | Health | sexo, cor_raca, faixa_etaria |
+| `pib_per_capita` | Economy | — |
+| `receita_per_capita` | Economy | — |
+| `despesa_saude_per_capita` | Economy | — |
+| `despesa_educacao_per_capita` | Economy | — |
+| `densidade_pop` | Demographics | — (2022 only) |
+
+`METRICAS_SAUDE = ["taxa_mortalidade", "taxa_homicidio"]` in `cross_filter.js` gates which metrics expose the sexo/cor_raca/faixa_etaria filter UI and include those params in tile URLs.
+
 ### Cross-filtering architecture
 
-Filters are split into two layers:
-- **Server-side** (`ano`, `cod_uf`, `cid10_capitulo`, `metrica`): change triggers new tile requests. Serialized as URL query params to Martin.
-- **GPU-side** (`faixa_etaria`, `cor_raca`, `valor_min/max`): applied by `DataFilterExtension` in WebGL shaders at 60fps with no new network request.
+**All demographic filters are server-side** — passed as query params to Martin → PostGIS, which aggregates `sim_mortalidade` records applying filters before computing rates. This means changing any filter reloads tiles (network request), but rates are always mathematically correct.
+
+Serialized in `getServerParams()` in `cross_filter.js`:
+- Always: `ano`, `cod_uf`, `cid10_capitulo`, `metrica`
+- For `METRICAS_SAUDE` only: `sexo`, `cor_raca`, `faixa_etaria_min/max` (only included when non-default)
+- For GEOLOCALIZACAO level only: `especie` (CNEFE address type filter)
 
 State is managed in a Zustand store (`frontend/src/filters/cross_filter.js`).
 
@@ -229,15 +248,41 @@ Martin's tile cache is keyed on the **full URL including query parameters**. Swi
 - Use **comma** as separator for multiple IDs: `N6[1100015,3550308]`
 - **Pipe separator** (`|`) causes HTTP 500. A single `N6[all]` fetches all 5570 municipalities in one call and avoids the separator entirely — prefer this.
 
-**Siconfi RREO API** (receita municipal):
+**Siconfi RREO API** (receita e despesas municipais):
 - Query parameters `no_conta`, `co_conta`, `no_coluna` are **completely ignored** by the server. The response always contains all ~4034 rows regardless of these params. Do not rely on server-side filtering.
-- Filter locally after fetching: `cod_conta == "ReceitasExcetoIntraOrcamentarias"` AND `coluna == "Até o Bimestre (c)"`.
 - Default `limit=5000` covers all rows without pagination needed.
-- Only ~3314/5570 municipalities (59.5%) report to Siconfi — small municipalities legitimately do not file RREO. Missing `receita_total` for ~2256 municipalities is expected, not a bug.
+- Only ~3314/5570 municipalities (59.5%) report to Siconfi — small municipalities legitimately do not file RREO. Missing data is expected, not a bug.
+
+Filter locally after fetching using these exact `cod_conta` + `coluna` combinations:
+
+| Field | `cod_conta` | `coluna` |
+|---|---|---|
+| `receita_total` | `"ReceitasExcetoIntraOrcamentarias"` | `"Até o Bimestre (c)"` |
+| `despesa_saude` | `"AplicacaoTotalDasDespesasComAcoesEServicosPublicosDeSaude"` | `"Valor Apurado Até o Bimestre"` |
+| `despesa_educacao` | `"MinimoAnualDasReceitasDeImpostosNaManutencaoEDesenvolvimentoDoEnsinoDemonstrativoSimplificado"` | `"Valor Apurado Até o Bimestre"` |
+
+Note: receita and despesas use different `coluna` strings (`"Até o Bimestre (c)"` vs `"Valor Apurado Até o Bimestre"`).
 
 ### SIM/DataSUS FTP rate limiting
 
 DataSUS serves `.dbc` files over FTP. Running more than 1–2 parallel downloads triggers `Connection refused` and `Connection reset by peer` errors. Always use `--workers 1` for `load_sim.py`. The default of 4 workers looks faster but silently fails most downloads. The `--limpar-ano <year>` flag does a DELETE before re-inserting (idempotent re-runs). Idempotency for individual UF+year combos is also ensured by DELETE-then-INSERT (not ON CONFLICT, since the serial PK never conflicts).
+
+### SIM sexo encoding (critical)
+
+`saude.sim_mortalidade.sexo` stores DataSUS numeric strings: `'1'` = Masculino, `'2'` = Feminino. The column is NOT `'M'`/`'F'`.
+
+The SQL tile functions map the frontend values:
+```sql
+AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
+```
+
+`load_sim.py` whitelist-filters to only store valid values:
+```python
+_sexo_raw = pd.to_numeric(df.get("SEXO", ...), errors="coerce").astype("Int8")
+df["sexo"] = _sexo_raw.where(_sexo_raw.isin([1, 2]))  # rejects '0', 'I', etc.
+```
+
+**Known pysus encoding bug**: older versions of pysus sometimes deliver the 2023 DBC with character-format sex codes that cause `pd.to_numeric` to produce `NaN` or letter values. Always verify after loading a year: `SELECT sexo, COUNT(*) FROM saude.sim_mortalidade WHERE ano=2023 GROUP BY sexo`. Should show only `'1'`, `'2'`, and `NULL` — never letters like `'I'`.
 
 ### Homicídio methodology (SIM/DataSUS, not SINESP)
 
@@ -270,6 +315,16 @@ Municipality code alignment: `sim_mortalidade.cod_municipio` = **6-digit** IBGE;
 Martin connects directly to PostGIS (`postgis:5432`), not through PgBouncer. PgBouncer is in transaction pooling mode which is incompatible with prepared statements used by Martin's connection pool.
 
 Martin auto-publishes all tables from schemas `geo`, `api`, `censo` and all functions from schema `api`. PMTiles files in `tileserver/pmtiles/` are served as a fallback.
+
+### CNEFE especie filter
+
+`censo.cnefe_enderecos.especie` distinguishes address type: `1` = residencial, `2` = coletivo (hospitals, schools, etc.). The `api.tiles_cnefe` function already accepts `especie` as a query param and filters with:
+```sql
+v_especie SMALLINT := (query_params->>'especie')::SMALLINT;
+-- ...
+AND (v_especie IS NULL OR c.especie = v_especie)
+```
+The UI exposes this filter only when `nivelAtual === "GEOLOCALIZACAO"` (zoom ≥ 13).
 
 ### Metadata API (`api/server.py`)
 
