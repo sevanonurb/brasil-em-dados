@@ -1,6 +1,11 @@
 /**
  * PainelDetalhes.jsx
  * Painel lateral de drill-down: exibido ao clicar em uma feature do mapa.
+ */
+
+import { CID10_LABELS } from "../filters/cross_filter.js";
+
+/**
  *
  * Campos disponíveis nos tiles (source-of-truth):
  *   UF (NACIONAL):    cod_uf, sigla, nome, regiao, populacao_total,
@@ -53,7 +58,7 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
 
   const valorFormatado = formatarMetrica(p.valor_metrica, metrica);
   const metricaLabel = cid10
-    ? `${METRICA_LABEL[metrica] ?? metrica} — CID ${cid10}`
+    ? `${METRICA_LABEL[metrica] ?? metrica} — ${CID10_LABELS[cid10] ?? `CID ${cid10}`}`
     : (METRICA_LABEL[metrica] ?? metrica);
 
   return (

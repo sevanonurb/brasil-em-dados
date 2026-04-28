@@ -19,7 +19,7 @@ import {
   calcularOpacidade,
   NIVEL_METADATA,
 } from "./layers/semantic_zoom.js";
-import { useFiltrosStore } from "./filters/cross_filter.js";
+import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { Legenda } from "./components/Legenda.jsx";
@@ -72,14 +72,31 @@ const METRICAS_RANGES = {
   },
 };
 
-// Escalas específicas por capítulo CID-10 (taxas /100k muito menores que mortalidade geral)
+// Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
+// NACIONAL = UF-level, ESTADUAL = município-level (maior variação)
 const CID10_RANGES = {
-  I: { NACIONAL: { min: 0, max: 400 }, ESTADUAL: { min: 0, max: 600 } },  // Cardiovascular: UF ~120–360/100k
-  C: { NACIONAL: { min: 0, max: 200 }, ESTADUAL: { min: 0, max: 300 } },  // Neoplasias: UF ~80–180/100k
-  J: { NACIONAL: { min: 0, max: 100 }, ESTADUAL: { min: 0, max: 200 } },  // Respiratórias
-  E: { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 120 } },  // Endócrinas/Diabetes
-  F: { NACIONAL: { min: 0, max: 30  }, ESTADUAL: { min: 0, max: 60  } },  // Transtornos mentais
-  X: { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 120 } },  // Causas externas
+  // Doenças crônicas — causas líderes de morte no Brasil
+  I:        { NACIONAL: { min: 0, max: 400 }, ESTADUAL: { min: 0, max: 800  } }, // Cardiovascular: ~170/100k nac.
+  C:        { NACIONAL: { min: 0, max: 200 }, ESTADUAL: { min: 0, max: 400  } }, // Neoplasias: ~103/100k nac.
+  J:        { NACIONAL: { min: 0, max: 100 }, ESTADUAL: { min: 0, max: 200  } }, // Respiratório: ~72/100k nac.
+  E:        { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 150  } }, // Diabetes: ~40/100k nac.
+  K:        { NACIONAL: { min: 0, max: 50  }, ESTADUAL: { min: 0, max: 120  } }, // Digestivo: ~32/100k nac.
+  N:        { NACIONAL: { min: 0, max: 40  }, ESTADUAL: { min: 0, max: 100  } }, // Renal: ~21/100k nac.
+  G:        { NACIONAL: { min: 0, max: 40  }, ESTADUAL: { min: 0, max: 100  } }, // Neurológico: ~21/100k nac.
+  // Doenças infecciosas
+  B:        { NACIONAL: { min: 0, max: 80  }, ESTADUAL: { min: 0, max: 200  } }, // HIV/Hepatite: ~47/100k nac.
+  A:        { NACIONAL: { min: 0, max: 30  }, ESTADUAL: { min: 0, max: 80   } }, // TB/Cólera: ~17/100k nac.
+  // Causas externas
+  suicidio: { NACIONAL: { min: 0, max: 20  }, ESTADUAL: { min: 0, max: 50   } }, // Suicídio: ~8/100k nac.
+  V:        { NACIONAL: { min: 0, max: 40  }, ESTADUAL: { min: 0, max: 100  } }, // Acidente transporte: ~16/100k
+  W:        { NACIONAL: { min: 0, max: 30  }, ESTADUAL: { min: 0, max: 80   } }, // Quedas/afogamentos: ~13/100k
+  X:        { NACIONAL: { min: 0, max: 60  }, ESTADUAL: { min: 0, max: 150  } }, // Causas externas diversas
+  Y:        { NACIONAL: { min: 0, max: 20  }, ESTADUAL: { min: 0, max: 50   } }, // Causas ext. indeterminadas
+  // Populações específicas
+  O:        { NACIONAL: { min: 0, max: 8   }, ESTADUAL: { min: 0, max: 20   } }, // Materna: ~1/100k nac.
+  P:        { NACIONAL: { min: 0, max: 20  }, ESTADUAL: { min: 0, max: 50   } }, // Perinatais: ~9/100k nac.
+  F:        { NACIONAL: { min: 0, max: 15  }, ESTADUAL: { min: 0, max: 40   } }, // Transtornos mentais: ~7/100k
+  Q:        { NACIONAL: { min: 0, max: 12  }, ESTADUAL: { min: 0, max: 30   } }, // Malformações: ~5/100k nac.
 };
 
 const METRICAS_SEM_DADOS = [];
@@ -100,7 +117,7 @@ function useAnosDisponiveis() {
 // Recebe metrica e cid10 como closure para exibir label correto.
 function makeTooltip(metrica, cid10) {
   const LABEL = {
-    taxa_mortalidade:            cid10 ? `Mortalidade CID-${cid10}` : "Mortalidade",
+    taxa_mortalidade:            cid10 ? (CID10_LABELS[cid10] ?? `Mortalidade CID-${cid10}`) : "Mortalidade",
     taxa_homicidio:              "Homicídio",
     pib_per_capita:              "PIB per capita",
     receita_per_capita:          "Receita per capita",

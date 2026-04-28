@@ -7,7 +7,7 @@
 
 import React, { useState } from "react";
 import { NIVEL_METADATA } from "../layers/semantic_zoom.js";
-import { METRICAS_SAUDE } from "../filters/cross_filter.js";
+import { METRICAS_SAUDE, CID10_LABELS } from "../filters/cross_filter.js";
 import "./RangeSlider.css";
 
 // 27 UFs em ordem alfabética de sigla
@@ -55,13 +55,29 @@ const METRICAS = [
 ];
 
 const CID10_CAPITULOS = [
-  { value: "",  label: "Todas as causas" },
-  { value: "I", label: "Cardiovasculares (CID I)" },
-  { value: "J", label: "Respiratórias (CID J)" },
-  { value: "C", label: "Neoplasias (CID C)" },
-  { value: "E", label: "Diabetes / Endócrinas (CID E)" },
-  { value: "F", label: "Transtornos mentais (CID F)" },
-  { value: "X", label: "Causas externas (CID X)" },
+  { value: "",         label: "Todas as causas" },
+  // Doenças crônicas não transmissíveis
+  { value: "I",        label: "Cardiovascular (I)" },
+  { value: "C",        label: "Neoplasias / Câncer (C)" },
+  { value: "J",        label: "Respiratório (J)" },
+  { value: "E",        label: "Diabetes / Endócrinas (E)" },
+  { value: "K",        label: "Digestivo / Cirrose (K)" },
+  { value: "N",        label: "Renal / Urológico (N)" },
+  { value: "G",        label: "Neurológico — Alzheimer, Parkinson (G)" },
+  // Doenças infecciosas e parasitárias
+  { value: "B",        label: "Infecciosas — HIV, Hepatite, Dengue (B)" },
+  { value: "A",        label: "Infecciosas — Tuberculose, Cólera (A)" },
+  // Causas externas e violência
+  { value: "suicidio", label: "Suicídio (X60–X84)" },
+  { value: "V",        label: "Acidentes de transporte (V)" },
+  { value: "W",        label: "Quedas / Afogamentos / Acidentes (W)" },
+  { value: "X",        label: "Causas externas diversas (X)" },
+  { value: "Y",        label: "Causas ext. indeterminadas (Y)" },
+  // Populações específicas
+  { value: "O",        label: "Mortalidade materna (O)" },
+  { value: "P",        label: "Perinatais / Neonatais (P)" },
+  { value: "F",        label: "Transtornos mentais (F)" },
+  { value: "Q",        label: "Malformações congênitas (Q)" },
 ];
 
 const COR_RACA_OPCOES = [

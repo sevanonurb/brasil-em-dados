@@ -21,7 +21,7 @@ DECLARE
     bbox_3857   geometry := ST_TileEnvelope(z, x, y);
     v_metrica   TEXT     := COALESCE(query_params->>'metrica', 'taxa_mortalidade');
     v_ano       INTEGER  := COALESCE((query_params->>'ano')::INTEGER, 2023);
-    v_cid10     CHAR(1)  := query_params->>'cid10_capitulo';
+    v_cid10     TEXT     := NULLIF(query_params->>'cid10_capitulo', '');
     v_cor_raca  SMALLINT := (query_params->>'cor_raca')::SMALLINT;
     v_sexo      CHAR(1)  := NULLIF(query_params->>'sexo', '');
     v_faixa_min SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
@@ -35,18 +35,15 @@ BEGIN
             SELECT s.cod_uf, COUNT(*)::FLOAT8 AS contagem
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
               AND (
-                  (v_metrica = 'taxa_mortalidade'         AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade' AND (
+                      v_cid10 IS NULL
+                      OR (v_cid10 = 'suicidio' AND s.cid10_codigo >= 'X60' AND s.cid10_codigo < 'X85')
+                      OR (v_cid10 <> 'suicidio' AND s.cid10_capitulo = v_cid10)
+                  ))
                   OR
-                  (v_metrica = 'taxa_homicidio'           AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
-                  OR
-                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
-                  OR
-                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
-                  OR
-                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
+                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
               )
               AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
@@ -82,8 +79,7 @@ BEGIN
             econ.pib_estadual,
             econ.receita_estadual_total,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             -- Ambos os filtros: estimativa proporcional (raça × faixa / total)
@@ -163,7 +159,7 @@ DECLARE
     bbox_3857   geometry := ST_TileEnvelope(z, x, y);
     v_ano       SMALLINT := COALESCE((query_params->>'ano')::SMALLINT, 2023);
     v_cod_uf    SMALLINT := (query_params->>'cod_uf')::SMALLINT;
-    v_cid10     CHAR(1)  := (query_params->>'cid10_capitulo');
+    v_cid10     TEXT     := NULLIF(query_params->>'cid10_capitulo', '');
     v_cor_raca  SMALLINT := (query_params->>'cor_raca')::SMALLINT;
     v_metrica   TEXT     := COALESCE(query_params->>'metrica', 'taxa_mortalidade');
     v_faixa_min SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
@@ -174,7 +170,7 @@ BEGIN
     IF v_cod_uf IS NOT NULL AND v_cod_uf NOT BETWEEN 11 AND 53 THEN
         RAISE EXCEPTION 'cod_uf inválido: %', v_cod_uf;
     END IF;
-    IF v_cid10 IS NOT NULL AND v_cid10 !~ '^[A-Z]$' THEN
+    IF v_cid10 IS NOT NULL AND v_cid10 !~ '^([A-Z]|suicidio)$' THEN
         RAISE EXCEPTION 'cid10_capitulo inválido: %', v_cid10;
     END IF;
     IF v_cor_raca IS NOT NULL AND v_cor_raca NOT BETWEEN 1 AND 5 THEN
@@ -188,18 +184,15 @@ BEGIN
             SELECT s.cod_municipio, COUNT(*)::FLOAT8 AS contagem
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
               AND (
-                  (v_metrica = 'taxa_mortalidade'           AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade' AND (
+                      v_cid10 IS NULL
+                      OR (v_cid10 = 'suicidio' AND s.cid10_codigo >= 'X60' AND s.cid10_codigo < 'X85')
+                      OR (v_cid10 <> 'suicidio' AND s.cid10_capitulo = v_cid10)
+                  ))
                   OR
-                  (v_metrica = 'taxa_homicidio'             AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
-                  OR
-                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
-                  OR
-                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
-                  OR
-                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
+                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
               )
               AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
@@ -229,8 +222,7 @@ BEGIN
             e.despesa_saude::FLOAT8             AS despesa_saude,
             e.despesa_educacao::FLOAT8          AS despesa_educacao,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
@@ -302,7 +294,7 @@ DECLARE
     bbox_3857     geometry := ST_TileEnvelope(z, x, y);
     v_cod_mun     INTEGER  := (query_params->>'cod_municipio')::INTEGER;
     v_ano         SMALLINT := COALESCE((query_params->>'ano')::SMALLINT, 2023);
-    v_cid10       CHAR(1)  := (query_params->>'cid10_capitulo');
+    v_cid10       TEXT     := NULLIF(query_params->>'cid10_capitulo', '');
     v_cor_raca    SMALLINT := (query_params->>'cor_raca')::SMALLINT;
     v_metrica     TEXT     := COALESCE(query_params->>'metrica', 'taxa_mortalidade');
     v_faixa_min   SMALLINT := COALESCE((query_params->>'faixa_etaria_min')::SMALLINT, 0);
@@ -323,9 +315,6 @@ BEGIN
                 CASE v_metrica
                     WHEN 'taxa_mortalidade'            THEN im.taxa_mortalidade_2023::FLOAT8
                     WHEN 'taxa_homicidio'              THEN im.taxa_homicidio_2023::FLOAT8
-                    WHEN 'mortalidade_cardiovascular'  THEN im.mortalidade_cardiovascular_2023::FLOAT8
-                    WHEN 'mortalidade_cancer'          THEN im.mortalidade_cancer_2023::FLOAT8
-                    WHEN 'mortalidade_respiratoria'    THEN im.mortalidade_respiratoria_2023::FLOAT8
                     WHEN 'pib_per_capita'              THEN im.pib_per_capita_2022::FLOAT8
                     WHEN 'receita_per_capita'          THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
                     WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
@@ -368,18 +357,15 @@ BEGIN
             FROM saude.sim_mortalidade s
             WHERE s.ano = v_ano
               AND s.cod_municipio IN (SELECT mt.cod_municipio / 10 FROM muns_no_tile mt)
-              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria')
+              AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
               AND (
-                  (v_metrica = 'taxa_mortalidade'           AND (v_cid10 IS NULL OR s.cid10_capitulo = v_cid10))
+                  (v_metrica = 'taxa_mortalidade' AND (
+                      v_cid10 IS NULL
+                      OR (v_cid10 = 'suicidio' AND s.cid10_codigo >= 'X60' AND s.cid10_codigo < 'X85')
+                      OR (v_cid10 <> 'suicidio' AND s.cid10_capitulo = v_cid10)
+                  ))
                   OR
-                  (v_metrica = 'taxa_homicidio'             AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
-                  OR
-                  (v_metrica = 'mortalidade_cardiovascular' AND s.cid10_capitulo = 'I')
-                  OR
-                  (v_metrica = 'mortalidade_cancer'         AND s.cid10_capitulo = 'C')
-                  OR
-                  (v_metrica = 'mortalidade_respiratoria'   AND s.cid10_capitulo = 'J')
+                  (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
               )
               AND (v_sexo IS NULL OR (v_sexo = 'M' AND s.sexo = '1') OR (v_sexo = 'F' AND s.sexo = '2'))
               AND (v_cor_raca IS NULL OR s.cor_raca = v_cor_raca)
@@ -407,8 +393,7 @@ BEGIN
             sc.domicilios_total,
             sc.populacao_total,
             CASE
-                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio',
-                                   'mortalidade_cardiovascular', 'mortalidade_cancer', 'mortalidade_respiratoria') THEN
+                WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
                         CASE
                             WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN

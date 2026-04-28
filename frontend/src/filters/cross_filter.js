@@ -29,6 +29,28 @@ export const ANOS_POR_METRICA = ANOS_POR_METRICA_DEFAULT;
 // Métricas que suportam filtros demográficos (sexo, cor/raça, faixa etária)
 export const METRICAS_SAUDE = ["taxa_mortalidade", "taxa_homicidio"];
 
+// Labels legíveis por capítulo/grupo CID-10 (inclui 'suicidio' como sub-capítulo especial)
+export const CID10_LABELS = {
+  I:        "Cardiovascular",
+  C:        "Neoplasias / Câncer",
+  J:        "Respiratório",
+  E:        "Diabetes / Endócrinas",
+  K:        "Digestivo / Cirrose",
+  N:        "Renal / Urológico",
+  G:        "Neurológico",
+  B:        "Infecciosas — HIV, Hepatite",
+  A:        "Infecciosas — TB, Cólera",
+  suicidio: "Suicídio",
+  V:        "Acidentes de transporte",
+  W:        "Quedas / Acidentes",
+  X:        "Causas externas diversas",
+  Y:        "Causas ext. indeterminadas",
+  O:        "Mortalidade materna",
+  P:        "Perinatais / Neonatais",
+  F:        "Transtornos mentais",
+  Q:        "Malformações congênitas",
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Store Zustand: estado global dos filtros
 // ─────────────────────────────────────────────────────────────────────────────
