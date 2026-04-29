@@ -47,59 +47,67 @@ PERIODO = 3
 def fetch_rgf_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None, float | None]:
     """
     Busca RGF do município e extrai:
-      - Dívida Consolidada Líquida / RCL (Anexo 01)
-      - Despesa Total com Pessoal / RCL (Anexo 02)
+      - Dívida Consolidada Líquida / RCL% (Anexo 02, cod_conta=PercentualDaDCLSobreARCL)
+      - Despesa Total com Pessoal / RCL% (Anexo 01, cod_conta=DespesaComPessoalTotal,
+        coluna="% sobre a RCL Ajustada")
+
+    Parâmetros obrigatórios da API Siconfi RGF:
+      co_esfera=M (Municipal), co_poder=E (Executivo)
 
     Retorna (cod_ibge, divida_rcl_pct, pessoal_rcl_pct).
     """
     divida_pct = None
     pessoal_pct = None
+    base_params = {
+        "an_exercicio": ano,
+        "in_periodicidade": PERIODICIDADE,
+        "nr_periodo": PERIODO,
+        "co_tipo_demonstrativo": "RGF",
+        "id_ente": cod_ibge,
+        "co_esfera": "M",
+        "co_poder": "E",
+    }
+    headers = {"User-Agent": "brasil-em-dados/1.0"}
 
-    # ── Anexo 01 — Dívida ────────────────────────────────────────────────────
-    url1 = (
-        f"{RGF_BASE}?an_exercicio={ano}&in_periodicidade={PERIODICIDADE}"
-        f"&nr_periodo={PERIODO}&co_tipo_demonstrativo=RGF"
-        f"&no_anexo=RGF-Anexo+01&id_ente={cod_ibge}"
-    )
+    # ── Anexo 01 — Despesa de Pessoal ────────────────────────────────────────
     try:
-        r = requests.get(url1, timeout=20,
-                         headers={"User-Agent": "brasil-em-dados/1.0"})
+        r = requests.get(RGF_BASE,
+                         params={**base_params, "no_anexo": "RGF-Anexo 01", "limit": 200},
+                         timeout=20, headers=headers)
         if r.status_code == 200:
-            items = r.json().get("items", [])
-            for item in items:
-                cod_conta = item.get("cod_conta", "")
-                coluna = item.get("coluna", "").lower()
-                # RCL is the reference; we want DCL or DCL/RCL ratio
-                if ("dividaconsolidadaliquida" in cod_conta.lower() or
-                        "dcl" in cod_conta.lower()):
-                    if "%" in coluna or "rcl" in coluna or "percentual" in coluna:
+            for item in r.json().get("items", []):
+                if (item.get("cod_conta") == "DespesaComPessoalTotal"
+                        and "% sobre a RCL" in item.get("coluna", "")):
+                    try:
+                        pessoal_pct = float(item["valor"])
+                        break
+                    except (TypeError, ValueError):
+                        pass
+    except Exception:
+        pass
+
+    # ── Anexo 02 — Dívida Consolidada ────────────────────────────────────────
+    try:
+        r = requests.get(RGF_BASE,
+                         params={**base_params, "no_anexo": "RGF-Anexo 02", "limit": 200},
+                         timeout=20, headers=headers)
+        if r.status_code == 200:
+            for item in r.json().get("items", []):
+                if item.get("cod_conta") == "PercentualDaDCLSobreARCL":
+                    # Prefer "3º Quadrimestre" (full year); fallback to any quadrimestre
+                    col = item.get("coluna", "")
+                    if "3º" in col or "3o" in col.lower():
                         try:
                             divida_pct = float(item["valor"])
                             break
                         except (TypeError, ValueError):
                             pass
-    except Exception:
-        pass
-
-    # ── Anexo 02 — Despesa de Pessoal ────────────────────────────────────────
-    url2 = (
-        f"{RGF_BASE}?an_exercicio={ano}&in_periodicidade={PERIODICIDADE}"
-        f"&nr_periodo={PERIODO}&co_tipo_demonstrativo=RGF"
-        f"&no_anexo=RGF-Anexo+02&id_ente={cod_ibge}"
-    )
-    try:
-        r = requests.get(url2, timeout=20,
-                         headers={"User-Agent": "brasil-em-dados/1.0"})
-        if r.status_code == 200:
-            items = r.json().get("items", [])
-            for item in items:
-                cod_conta = item.get("cod_conta", "")
-                coluna = item.get("coluna", "").lower()
-                if ("pessoaltotal" in cod_conta.lower() or
-                        "despesacompessoal" in cod_conta.lower()):
-                    if "%" in coluna or "rcl" in coluna or "percentual" in coluna:
+            # Fallback: any % da DCL entry
+            if divida_pct is None:
+                for item in r.json().get("items", []):
+                    if item.get("cod_conta") == "PercentualDaDCLSobreARCL":
                         try:
-                            pessoal_pct = float(item["valor"])
+                            divida_pct = float(item["valor"])
                             break
                         except (TypeError, ValueError):
                             pass
@@ -111,14 +119,16 @@ def fetch_rgf_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None, flo
 
 def probe_rgf_structure(cod_ibge: int, ano: int):
     """Imprime estrutura do RGF para um município (diagnóstico)."""
-    for anexo in ["RGF-Anexo+01", "RGF-Anexo+02"]:
-        url = (
-            f"{RGF_BASE}?an_exercicio={ano}&in_periodicidade={PERIODICIDADE}"
-            f"&nr_periodo={PERIODO}&co_tipo_demonstrativo=RGF"
-            f"&no_anexo={anexo}&id_ente={cod_ibge}&limit=20"
-        )
+    for anexo in ["RGF-Anexo 01", "RGF-Anexo 02"]:
+        params = {
+            "an_exercicio": ano, "in_periodicidade": PERIODICIDADE,
+            "nr_periodo": PERIODO, "co_tipo_demonstrativo": "RGF",
+            "no_anexo": anexo, "id_ente": cod_ibge,
+            "co_esfera": "M", "co_poder": "E", "limit": 20,
+        }
         print(f"\n  === {anexo} — município {cod_ibge} ano {ano} ===")
-        r = requests.get(url, timeout=30, headers={"User-Agent": "brasil-em-dados/1.0"})
+        r = requests.get(RGF_BASE, params=params, timeout=30,
+                         headers={"User-Agent": "brasil-em-dados/1.0"})
         if r.status_code != 200:
             print(f"  HTTP {r.status_code}")
             continue

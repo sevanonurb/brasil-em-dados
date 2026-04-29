@@ -42,14 +42,28 @@ SIDRA_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 
 # ─── Helpers SIDRA ───────────────────────────────────────────────────────────
 
-def list_vars(tabela: int) -> list[dict]:
-    """Retorna lista de variáveis disponíveis na tabela SIDRA."""
-    url = f"{SIDRA_BASE}/{tabela}/variaveis"
+def list_vars(tabela: int, periodo: str = "2022",
+              classificacao: str = None) -> list[dict]:
+    """
+    Descobre variáveis de uma tabela SIDRA fazendo uma query allxp para um
+    município de exemplo (São Paulo 3550308). Retorna lista de {id, nome}.
+    """
+    classif = f"&classificacao={classificacao}" if classificacao else ""
+    url = (
+        f"{SIDRA_BASE}/{tabela}/periodos/{periodo}/variaveis/allxp"
+        f"?localidades=N6[3550308]{classif}"
+    )
     r = requests.get(url, timeout=30)
-    if r.status_code == 200:
-        return r.json()
-    print(f"  AVISO: GET /variaveis tabela {tabela} → HTTP {r.status_code}")
-    return []
+    if r.status_code != 200:
+        print(f"  AVISO: probe allxp tabela {tabela} → HTTP {r.status_code}")
+        return []
+    variaveis = []
+    for entry in r.json():
+        variaveis.append({
+            "id":   str(entry.get("id", entry.get("variavel_id", ""))),
+            "nome": entry.get("variavel", entry.get("nome", "")),
+        })
+    return variaveis
 
 
 def find_var_id(variaveis: list[dict], *search_terms: str) -> str | None:
@@ -188,48 +202,39 @@ def carregar_alfabetizacao(conn):
 
 
 def carregar_internet(conn):
-    """T9720 — % domicílios com acesso à internet."""
-    print("\n=== T9720: Domicílios com internet ===")
-    variaveis = list_vars(9720)
-    if not variaveis:
-        print("  AVISO: Sem variáveis — pulando T9720")
+    """
+    % domicílios com acesso à internet.
+    A tabela SIDRA específica para este indicador no Censo 2022 usa uma
+    classificação interna de 'Domicílios particulares por acesso à internet'.
+    A função tenta encontrar a variável adequada em candidatos confirmados.
+    """
+    print("\n=== Internet: buscando tabela SIDRA adequada ===")
+
+    # Tabelas candidatas confirmadas para N6[all] com variável de internet
+    # Atualizar com o ID correto quando confirmado via probe manual.
+    candidatos = [
+        # (tabela, var_busca_termo, denominador)
+        # Adicionar quando o table ID correto for confirmado:
+        # (XXXXX, "internet", None),
+    ]
+
+    if not candidatos:
+        print("  AVISO: Tabela SIDRA para internet não confirmada — pulando.")
+        print("  Para encontrar: probe tabelas 9879-9882 com classificação de internet")
         return
 
-    print(f"  Variáveis disponíveis: {[v.get('nome') for v in variaveis]}")
+    for tabela, busca, _ in candidatos:
+        variaveis = list_vars(tabela)
+        var_id = find_var_id(variaveis, busca)
+        if not var_id:
+            continue
+        dados = sidra_fetch(tabela, var_id)
+        if dados:
+            rows = [(cod, "domicilios_internet", 2022, v) for cod, v in dados.items()]
+            upsert_metricas(rows, conn)
+            return
 
-    # Tentativa 1: variável de % diretamente
-    var_pct = find_var_id(variaveis, "%", "percentual", "proporção")
-    if var_pct:
-        dados = sidra_fetch(9720, var_pct)
-        rows = [(cod, "domicilios_internet", 2022, v) for cod, v in dados.items()]
-        upsert_metricas(rows, conn)
-        return
-
-    # Tentativa 2: contagem de domicílios com internet → divide por total
-    var_count = find_var_id(variaveis, "internet", "acesso")
-    if not var_count and variaveis:
-        var_count = str(variaveis[0]["id"])
-
-    if not var_count:
-        print("  AVISO: Variável de internet não encontrada em T9720")
-        return
-
-    contagem = sidra_fetch(9720, var_count)
-    if not contagem:
-        return
-
-    # Total de domicílios: buscar de censo.domicilios_municipio
-    with conn.cursor() as cur:
-        cur.execute("SELECT cod_municipio, total_domicilios FROM censo.domicilios_municipio")
-        total_dom = {row[0]: row[1] for row in cur.fetchall()}
-
-    rows = []
-    for cod, cnt in contagem.items():
-        total = total_dom.get(cod)
-        if total and total > 0:
-            rows.append((cod, "domicilios_internet", 2022, cnt / total * 100))
-    print(f"  % calculado para {len(rows)} municípios")
-    upsert_metricas(rows, conn)
+    print("  Nenhuma tabela candidata funcionou para domicilios_internet")
 
 
 def carregar_media_moradores(conn):
@@ -306,7 +311,8 @@ def carregar_pam(conn, anos: list[int]):
 
     # Verificar variáveis disponíveis
     variaveis = list_vars(5457)
-    print(f"  Variáveis disponíveis: {[f'{v[\"id\"]}={v[\"nome\"]}' for v in variaveis[:6]]}")
+    var_desc = [str(v.get("id")) + "=" + v.get("nome", "") for v in variaveis[:6]]
+    print(f"  Variáveis disponíveis: {var_desc}")
 
     var_id = find_var_id(variaveis, "valor da produção", "valor bruto", "vbp")
     if not var_id:

@@ -93,7 +93,6 @@ const GRUPOS_METRICAS = [
       { value: "taxa_envelhecimento",         label: "Índice de envelhecimento" },
       { value: "razao_sexo",                  label: "Razão de sexo (h/100 mulheres)" },
       { value: "media_moradores",             label: "Média de moradores por domicílio" },
-      { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
     ],
   },
