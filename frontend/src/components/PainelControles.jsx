@@ -89,6 +89,7 @@ const GRUPOS_METRICAS = [
   {
     label: "Renda e Trabalho (Censo 2022 Amostra)",
     opcoes: [
+      { value: "taxa_ocupacao",               label: "Nível de ocupação 10+ (%)" },
       { value: "renda_domiciliar_per_capita",  label: "Renda domiciliar per capita — média (R$)" },
       { value: "renda_domiciliar_mediana_pc",  label: "Renda domiciliar per capita — mediana (R$)" },
       { value: "renda_media_trabalho",         label: "Renda média do trabalho (R$)" },
@@ -109,6 +110,7 @@ const GRUPOS_METRICAS = [
       { value: "densidade_pop",               label: "Densidade demográfica (hab/km²)" },
       { value: "taxa_envelhecimento",         label: "Índice de envelhecimento" },
       { value: "razao_sexo",                  label: "Razão de sexo (h/100 mulheres)" },
+      { value: "idade_mediana",               label: "Idade mediana (anos)" },
       { value: "media_moradores",             label: "Média de moradores por domicílio" },
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },

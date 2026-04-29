@@ -49,10 +49,14 @@ FALLBACK = {
     "renda_domiciliar_mediana_pc": [2022],
     "renda_media_trabalho":        [2022],
     "renda_mediana_trabalho":      [2022],
+    # Censo 2022 Amostra — Trabalho (estático)
+    "taxa_ocupacao":               [2022],
     # Censo 2022 Amostra — Educação (estático)
     "media_anos_estudo":           [2022],
     "pct_superior_completo":       [2022],
     "taxa_deficiencia":            [2022],
+    # Censo 2022 — Demográficos adicionais (estático)
+    "idade_mediana":               [2022],
     # Produção Agrícola Municipal (PAM — anual)
     "vbp_agricola_per_capita":     [2022],
     # Fiscal — Siconfi RGF (anual)
@@ -131,10 +135,14 @@ def query_anos():
         "renda_domiciliar_mediana_pc": [2022],
         "renda_media_trabalho":        [2022],
         "renda_mediana_trabalho":      [2022],
+        # Censo 2022 Amostra — Trabalho (estático)
+        "taxa_ocupacao":               anos_metricas.get("taxa_ocupacao", [2022]),
         # Censo 2022 Amostra — Educação (estático)
         "media_anos_estudo":           [2022],
         "pct_superior_completo":       [2022],
         "taxa_deficiencia":            [2022],
+        # Censo 2022 — Demográficos adicionais (estático)
+        "idade_mediana":               anos_metricas.get("idade_mediana", [2022]),
         # Produção Agrícola Municipal (PAM — anual, carregado via load_metricas_ibge.py)
         "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2022]),
         # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)

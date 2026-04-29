@@ -44,10 +44,14 @@ export const ANOS_POR_METRICA_DEFAULT = {
   renda_domiciliar_mediana_pc: [2022],
   renda_media_trabalho:        [2022],
   renda_mediana_trabalho:      [2022],
+  // Censo 2022 Amostra — Trabalho
+  taxa_ocupacao:               [2022],
   // Censo 2022 Amostra — Educação
   media_anos_estudo:           [2022],
   pct_superior_completo:       [2022],
   taxa_deficiencia:            [2022],
+  // Censo 2022 — Demográficos adicionais
+  idade_mediana:               [2022],
   // PAM — Produção Agrícola Municipal
   vbp_agricola_per_capita:     [2022],
   // Fiscal — Siconfi RGF

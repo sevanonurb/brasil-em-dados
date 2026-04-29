@@ -7,13 +7,24 @@ Indicadores carregados:
   Censo 2022 (estáticos, ano=2022):
     taxa_envelhecimento  — índice de envelhecimento (T9756)
     razao_sexo           — homens por 100 mulheres (T9756)
+    idade_mediana        — idade mediana da população (T9515)
     taxa_alfabetizacao   — % pessoas 15+ alfabetizadas (T9543)
-    domicilios_internet  — % domicílios com internet (T9720 / T6803)
+    domicilios_internet  — % domicílios com internet (T9936)
     media_moradores      — média de moradores por domicílio (T9877)
     pop_favelas_pct      — % pop em aglomerados subnormais (T9884 / geo.municipios)
+    taxa_ocupacao        — nível de ocupação 10+ (T10268 V675)
+
+  Censo 2022 Amostra:
+    renda_domiciliar_per_capita — rendimento nominal domiciliar per capita médio (T10295)
+    renda_domiciliar_mediana_pc — rendimento nominal domiciliar per capita mediano (T10295)
+    renda_media_trabalho        — rendimento médio do trabalho (T10280)
+    renda_mediana_trabalho      — rendimento mediano do trabalho (T10280)
+    media_anos_estudo           — média de anos de estudo 11+ (T10062)
+    pct_superior_completo       — % superior completo 25+ (T10142)
+    taxa_deficiencia            — % com deficiência 2+ (T10128)
 
   PAM — Produção Agrícola Municipal (anual):
-    vbp_agricola_per_capita — VBP agrícola per capita em R$ (T5457 V215)
+    vbp_agricola_per_capita — VBP agrícola per capita em R$ (T5457+T1612 V215)
 
 Uso:
     python load_metricas_ibge.py               # todos os indicadores
@@ -174,6 +185,75 @@ def carregar_censo_demografico(conn):
         upsert_metricas(rows, conn)
     else:
         print("  AVISO: Variável de razão de sexo não encontrada em T9756")
+
+
+def carregar_idade_mediana(conn):
+    """T9515 V10613 — Idade mediana da população residente (Censo 2022)."""
+    print("\n=== T9515: Idade mediana ===")
+    url = f"{SIDRA_BASE}/9515/periodos/2022/variaveis/10613?localidades=N6[all]"
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T9515 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "idade_mediana", 2022, v) for cod, v in result.items()], conn)
+
+
+def carregar_taxa_ocupacao(conn):
+    """T10268 V675 — Nível de ocupação (%) das pessoas de 10 anos ou mais (Censo 2022 Amostra)."""
+    print("\n=== T10268: Taxa de ocupação (10+) ===")
+    url = f"{SIDRA_BASE}/10268/periodos/2022/variaveis/675?localidades=N6[all]"
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10268 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            cats = res_item.get("classificacoes", [])
+            if not all(list(c.get("categoria", {}).values()) == ["Total"] for c in cats):
+                continue
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "taxa_ocupacao", 2022, v) for cod, v in result.items()], conn)
 
 
 def carregar_alfabetizacao(conn):
@@ -604,44 +684,31 @@ def carregar_internet(conn):
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
 def carregar_pam(conn, anos: list[int]):
-    """T5457 — Valor Bruto da Produção agrícola (lavouras permanentes)."""
-    print("\n=== T5457: PAM — Valor Bruto da Produção (lavouras permanentes) ===")
+    """
+    PAM — Valor Bruto da Produção agrícola per capita.
+    T5457 V215 = lavouras permanentes + T1612 V215 = lavouras temporárias.
+    Os dois são somados para dar o VBP total da lavoura (Mil Reais → R$ per capita).
+    """
+    print("\n=== PAM: Valor Bruto da Produção (permanentes T5457 + temporárias T1612) ===")
 
-    # Verificar variáveis disponíveis
-    variaveis = list_vars(5457)
-    var_desc = [str(v.get("id")) + "=" + v.get("nome", "") for v in variaveis[:6]]
-    print(f"  Variáveis disponíveis: {var_desc}")
-
-    var_id = find_var_id(variaveis, "valor da produção", "valor bruto", "vbp")
-    if not var_id:
-        var_id = find_var_id(variaveis, "valor")
-    if not var_id and variaveis:
-        var_id = str(variaveis[0]["id"])
-        print(f"  Usando primeira variável disponível: {var_id}")
-
-    if not var_id:
-        print("  AVISO: Variável VBP não encontrada em T5457")
-        return
-
-    # VBP de lavouras temporárias também (T5457 cobre permanentes, T5457 é PAM completo)
-    # Tentar também T1612 para lavouras temporárias
     with conn.cursor() as cur:
         cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
         pop_map = {row[0]: row[1] for row in cur.fetchall()}
 
     for ano in anos:
         print(f"\n  Ano {ano}:")
-        dados = sidra_fetch(5457, var_id, periodo=str(ano))
-        if not dados:
-            continue
+        perm = sidra_fetch(5457, 215, periodo=str(ano))   # lavouras permanentes
+        temp = sidra_fetch(1612, 215, periodo=str(ano))   # lavouras temporárias
 
+        # Soma os dois (municípios com apenas um tipo de lavoura também entram)
+        todos = set(perm) | set(temp)
         rows = []
-        for cod, vbp_milhares in dados.items():
+        for cod in todos:
             pop = pop_map.get(cod)
-            if pop and pop > 0:
-                # VBP em Mil Reais → R$ per capita
-                vbp_per_capita = (vbp_milhares * 1000) / pop
-                rows.append((cod, "vbp_agricola_per_capita", ano, vbp_per_capita))
+            if not pop or pop <= 0:
+                continue
+            vbp_total = perm.get(cod, 0.0) + temp.get(cod, 0.0)
+            rows.append((cod, "vbp_agricola_per_capita", ano, (vbp_total * 1000) / pop))
         print(f"    Per capita calculado para {len(rows)} municípios")
         upsert_metricas(rows, conn)
 
@@ -666,10 +733,14 @@ def main():
         if not args.skip_censo:
             print("\n──── Censo 2022 — Indicadores Demográficos ────")
             carregar_censo_demografico(conn)
+            carregar_idade_mediana(conn)
             carregar_alfabetizacao(conn)
             carregar_internet(conn)
             carregar_media_moradores(conn)
             carregar_favelas(conn)
+            print("\n──── Censo 2022 Amostra — Trabalho ────")
+            carregar_taxa_ocupacao(conn)
+            print("\n──── Censo 2022 Amostra — Renda e Trabalho ────")
             carregar_renda_domiciliar(conn)
             carregar_anos_estudo(conn)
             carregar_renda_trabalho(conn)

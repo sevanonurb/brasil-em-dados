@@ -37,6 +37,8 @@ const METRICAS_LABELS = {
   media_anos_estudo:           "Média de anos de estudo (11+)",
   pct_superior_completo:       "Superior completo — 25+ (%)",
   taxa_deficiencia:            "Taxa de deficiência (%)",
+  taxa_ocupacao:               "Nível de ocupação 10+ (%)",
+  idade_mediana:               "Idade mediana (anos)",
 };
 
 const METRICAS_REAIS = new Set([
@@ -52,6 +54,7 @@ const METRICAS_PERCENT = new Set([
   "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
   "divida_rcl", "despesa_pessoal_rcl",
   "pct_superior_completo", "taxa_deficiencia",
+  "taxa_ocupacao",
 ]);
 
 function formatarValor(v, metrica) {
@@ -69,7 +72,7 @@ function formatarValor(v, metrica) {
   if (metrica === "leitos_sus_por_1k") {
     return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
   }
-  if (metrica === "media_moradores" || metrica === "media_anos_estudo") {
+  if (metrica === "media_moradores" || metrica === "media_anos_estudo" || metrica === "idade_mediana") {
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
@@ -85,6 +88,7 @@ const METRICAS_MELHOR_ALTO = new Set([
   "media_anos_estudo", "pct_superior_completo",
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   "renda_media_trabalho", "renda_mediana_trabalho",
+  "taxa_ocupacao",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

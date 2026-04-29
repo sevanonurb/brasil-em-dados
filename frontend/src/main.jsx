@@ -150,9 +150,9 @@ const METRICAS_RANGES = {
   },
   // VBP agrícola per capita (R$)
   vbp_agricola_per_capita: {
-    NACIONAL:  { min: 0, max: 5000  },
-    ESTADUAL:  { min: 0, max: 20000 },
-    MUNICIPAL: { min: 0, max: 50000 },
+    NACIONAL:  { min: 0, max: 10000  },
+    ESTADUAL:  { min: 0, max: 40000  },
+    MUNICIPAL: { min: 0, max: 100000 },
   },
   // Fiscal — Dívida Consolidada / RCL (%) — limite LRF = 120%
   divida_rcl: {
@@ -202,6 +202,16 @@ const METRICAS_RANGES = {
     NACIONAL:  { min: 3,  max: 12 },
     ESTADUAL:  { min: 0,  max: 15 },
     MUNICIPAL: { min: 0,  max: 20 },
+  },
+  taxa_ocupacao: {
+    NACIONAL:  { min: 35, max: 70 },
+    ESTADUAL:  { min: 30, max: 75 },
+    MUNICIPAL: { min: 20, max: 80 },
+  },
+  idade_mediana: {
+    NACIONAL:  { min: 20, max: 45 },
+    ESTADUAL:  { min: 15, max: 55 },
+    MUNICIPAL: { min: 15, max: 60 },
   },
 };
 
@@ -278,6 +288,8 @@ function makeTooltip(metrica, cid10) {
     media_anos_estudo:           "Média anos de estudo",
     pct_superior_completo:       "Superior completo",
     taxa_deficiencia:            "Taxa de deficiência",
+    taxa_ocupacao:               "Nível de ocupação",
+    idade_mediana:               "Idade mediana",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
@@ -296,6 +308,7 @@ function makeTooltip(metrica, cid10) {
     "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
     "divida_rcl", "despesa_pessoal_rcl",
     "pct_superior_completo", "taxa_deficiencia",
+    "taxa_ocupacao",
   ]);
 
   return ({ object }) => {
@@ -332,6 +345,10 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b> mor./dom.`;
       } else if (metrica === "taxa_envelhecimento") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>`;
+      } else if (metrica === "media_anos_estudo") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b> anos`;
+      } else if (metrica === "idade_mediana") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> anos`;
       } else {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
       }
