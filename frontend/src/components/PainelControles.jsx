@@ -99,6 +99,8 @@ const GRUPOS_METRICAS = [
     label: "Educação — Censo 2022 Amostra",
     opcoes: [
       { value: "media_anos_estudo",            label: "Média de anos de estudo (11+)" },
+      { value: "pct_superior_completo",        label: "Superior completo — 25+ (%)" },
+      { value: "taxa_deficiencia",             label: "Taxa de deficiência (%)" },
     ],
   },
   {

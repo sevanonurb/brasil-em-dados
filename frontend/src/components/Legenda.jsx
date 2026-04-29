@@ -35,6 +35,8 @@ const METRICAS_LABELS = {
   renda_media_trabalho:        "Renda média do trabalho (R$)",
   renda_mediana_trabalho:      "Renda mediana do trabalho (R$)",
   media_anos_estudo:           "Média de anos de estudo (11+)",
+  pct_superior_completo:       "Superior completo — 25+ (%)",
+  taxa_deficiencia:            "Taxa de deficiência (%)",
 };
 
 const METRICAS_REAIS = new Set([
@@ -49,6 +51,7 @@ const METRICAS_PERCENT = new Set([
   "acesso_agua", "acesso_esgoto", "coleta_lixo",
   "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
   "divida_rcl", "despesa_pessoal_rcl",
+  "pct_superior_completo", "taxa_deficiencia",
 ]);
 
 function formatarValor(v, metrica) {
@@ -79,7 +82,7 @@ const METRICAS_MELHOR_ALTO = new Set([
   "ideb_anos_iniciais", "ideb_anos_finais",
   "taxa_alfabetizacao", "domicilios_internet",
   "vbp_agricola_per_capita",
-  "media_anos_estudo",
+  "media_anos_estudo", "pct_superior_completo",
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   "renda_media_trabalho", "renda_mediana_trabalho",
 ]);

@@ -189,9 +189,19 @@ const METRICAS_RANGES = {
   },
   // Educação (Censo 2022 Amostra)
   media_anos_estudo: {
-    NACIONAL:  { min: 4, max: 12 },
-    ESTADUAL:  { min: 2, max: 14 },
-    MUNICIPAL: { min: 1, max: 16 },
+    NACIONAL:  { min: 4,  max: 12 },
+    ESTADUAL:  { min: 2,  max: 14 },
+    MUNICIPAL: { min: 1,  max: 16 },
+  },
+  pct_superior_completo: {
+    NACIONAL:  { min: 0,  max: 25 },
+    ESTADUAL:  { min: 0,  max: 40 },
+    MUNICIPAL: { min: 0,  max: 50 },
+  },
+  taxa_deficiencia: {
+    NACIONAL:  { min: 3,  max: 12 },
+    ESTADUAL:  { min: 0,  max: 15 },
+    MUNICIPAL: { min: 0,  max: 20 },
   },
 };
 
@@ -266,6 +276,8 @@ function makeTooltip(metrica, cid10) {
     renda_media_trabalho:        "Renda média trabalho",
     renda_mediana_trabalho:      "Renda mediana trabalho",
     media_anos_estudo:           "Média anos de estudo",
+    pct_superior_completo:       "Superior completo",
+    taxa_deficiencia:            "Taxa de deficiência",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
@@ -283,6 +295,7 @@ function makeTooltip(metrica, cid10) {
     "acesso_agua", "acesso_esgoto", "coleta_lixo",
     "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
     "divida_rcl", "despesa_pessoal_rcl",
+    "pct_superior_completo", "taxa_deficiencia",
   ]);
 
   return ({ object }) => {

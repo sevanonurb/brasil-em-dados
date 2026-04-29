@@ -305,6 +305,87 @@ def carregar_favelas(conn):
 
 # ─── Censo 2022 — Renda e Trabalho ───────────────────────────────────────────
 
+def carregar_deficiencia(conn):
+    """
+    T10128 — Taxa de deficiência (Censo 2022 Amostra).
+    V13403 = Percentual de pessoas de 2 anos ou mais com algum tipo de deficiência.
+    Classificação: Total (sem filtros).
+    """
+    print("\n=== T10128: Taxa de deficiência ===")
+    url = f"{SIDRA_BASE}/10128/periodos/2022/variaveis/13403?localidades=N6[all]"
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10128 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            cats = res_item.get("classificacoes", [])
+            if not all(list(c.get("categoria", {}).values()) == ["Total"] for c in cats):
+                continue
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "taxa_deficiencia", 2022, v) for cod, v in result.items()], conn)
+
+
+def carregar_superior_completo(conn):
+    """
+    T10142 — % de pessoas de 25 anos ou mais com ensino superior completo (Censo 2022 Amostra).
+    V10270 = distribuição percentual. Classificação 1568 (Nível de instrução),
+    categoria 99713 = 'Superior completo'. Cor/raça = Total (86, cat 95251).
+    Existência de deficiência = Total (839, cat 46583).
+    """
+    print("\n=== T10142: % com superior completo (25+) ===")
+    url = (
+        f"{SIDRA_BASE}/10142/periodos/2022/variaveis/10270"
+        f"?localidades=N6[all]&classificacao=1568[99713]&classificacao=86[95251]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10142 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "pct_superior_completo", 2022, v) for cod, v in result.items()], conn)
+
+
 def carregar_renda_domiciliar(conn):
     """
     T10295 — Rendimento nominal domiciliar per capita (Censo 2022 Amostra).
@@ -592,6 +673,8 @@ def main():
             carregar_renda_domiciliar(conn)
             carregar_anos_estudo(conn)
             carregar_renda_trabalho(conn)
+            carregar_deficiencia(conn)
+            carregar_superior_completo(conn)
 
         if not args.skip_pam:
             carregar_pam(conn, args.anos_pam)
