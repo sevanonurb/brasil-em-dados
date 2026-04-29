@@ -21,14 +21,28 @@ const METRICAS_LABELS = {
   medicos_por_10k:             "Médicos (por 10k hab.)",
   ideb_anos_iniciais:          "IDEB — anos iniciais (0–10)",
   ideb_anos_finais:            "IDEB — anos finais (0–10)",
+  taxa_alfabetizacao:          "Taxa de alfabetização 15+ (%)",
+  taxa_envelhecimento:         "Índice de envelhecimento",
+  razao_sexo:                  "Razão de sexo (h/100 mulheres)",
+  media_moradores:             "Média de moradores/domicílio",
+  domicilios_internet:         "Domicílios com internet (%)",
+  pop_favelas_pct:             "Pop. em aglomerados subnormais (%)",
+  vbp_agricola_per_capita:     "VBP agrícola per capita (R$)",
+  divida_rcl:                  "Dívida consolidada / RCL (%)",
+  despesa_pessoal_rcl:         "Despesa pessoal / RCL (%)",
 };
 
 const METRICAS_REAIS = new Set([
   "pib_per_capita", "receita_per_capita",
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
+  "vbp_agricola_per_capita",
 ]);
 
-const METRICAS_PERCENT = new Set(["acesso_agua", "acesso_esgoto", "coleta_lixo"]);
+const METRICAS_PERCENT = new Set([
+  "acesso_agua", "acesso_esgoto", "coleta_lixo",
+  "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
+  "divida_rcl", "despesa_pessoal_rcl",
+]);
 
 function formatarValor(v, metrica) {
   if (v == null) return "—";
@@ -45,6 +59,9 @@ function formatarValor(v, metrica) {
   if (metrica === "leitos_sus_por_1k") {
     return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
   }
+  if (metrica === "media_moradores") {
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  }
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
 
@@ -53,6 +70,8 @@ const METRICAS_MELHOR_ALTO = new Set([
   "acesso_agua", "acesso_esgoto", "coleta_lixo",
   "taxa_natalidade", "leitos_sus_por_1k", "medicos_por_10k",
   "ideb_anos_iniciais", "ideb_anos_finais",
+  "taxa_alfabetizacao", "domicilios_internet",
+  "vbp_agricola_per_capita",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

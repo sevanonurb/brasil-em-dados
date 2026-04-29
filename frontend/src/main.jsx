@@ -112,6 +112,60 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 2, max: 9 },
     MUNICIPAL: { min: 1, max: 9 },
   },
+  // Educação — Alfabetização (%)
+  taxa_alfabetizacao: {
+    NACIONAL:  { min: 75, max: 100 },
+    ESTADUAL:  { min: 60, max: 100 },
+    MUNICIPAL: { min: 40, max: 100 },
+  },
+  // Demográfico — Índice de envelhecimento: (pop 60+/pop 0-14)×100
+  taxa_envelhecimento: {
+    NACIONAL:  { min: 0, max: 200 },
+    ESTADUAL:  { min: 0, max: 400 },
+    MUNICIPAL: { min: 0, max: 600 },
+  },
+  // Demográfico — Razão de sexo: homens por 100 mulheres
+  razao_sexo: {
+    NACIONAL:  { min: 85, max: 115 },
+    ESTADUAL:  { min: 75, max: 130 },
+    MUNICIPAL: { min: 60, max: 160 },
+  },
+  // Demográfico — Média de moradores por domicílio
+  media_moradores: {
+    NACIONAL:  { min: 2.0, max: 4.0 },
+    ESTADUAL:  { min: 1.5, max: 5.0 },
+    MUNICIPAL: { min: 1.0, max: 6.0 },
+  },
+  // Domicílios com internet (%)
+  domicilios_internet: {
+    NACIONAL:  { min: 40, max: 100 },
+    ESTADUAL:  { min: 20, max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  // % da população em aglomerados subnormais (favelas)
+  pop_favelas_pct: {
+    NACIONAL:  { min: 0, max: 25  },
+    ESTADUAL:  { min: 0, max: 50  },
+    MUNICIPAL: { min: 0, max: 100 },
+  },
+  // VBP agrícola per capita (R$)
+  vbp_agricola_per_capita: {
+    NACIONAL:  { min: 0, max: 5000  },
+    ESTADUAL:  { min: 0, max: 20000 },
+    MUNICIPAL: { min: 0, max: 50000 },
+  },
+  // Fiscal — Dívida Consolidada / RCL (%) — limite LRF = 120%
+  divida_rcl: {
+    NACIONAL:  { min: 0, max: 100 },
+    ESTADUAL:  { min: 0, max: 200 },
+    MUNICIPAL: { min: 0, max: 300 },
+  },
+  // Fiscal — Despesa de Pessoal / RCL (%) — limite LRF = 54%
+  despesa_pessoal_rcl: {
+    NACIONAL:  { min: 20, max: 60  },
+    ESTADUAL:  { min: 0,  max: 80  },
+    MUNICIPAL: { min: 0,  max: 120 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -174,14 +228,28 @@ function makeTooltip(metrica, cid10) {
     medicos_por_10k:             "Médicos",
     ideb_anos_iniciais:          "IDEB anos iniciais",
     ideb_anos_finais:            "IDEB anos finais",
+    taxa_alfabetizacao:          "Taxa de alfabetização",
+    taxa_envelhecimento:         "Índice de envelhecimento",
+    razao_sexo:                  "Razão de sexo",
+    media_moradores:             "Média de moradores",
+    domicilios_internet:         "Domicílios c/ internet",
+    pop_favelas_pct:             "Pop. em favelas",
+    vbp_agricola_per_capita:     "VBP agrícola per capita",
+    divida_rcl:                  "Dívida / RCL",
+    despesa_pessoal_rcl:         "Pessoal / RCL",
   };
 
   const METRICAS_REAIS = new Set([
     "pib_per_capita", "receita_per_capita",
     "despesa_saude_per_capita", "despesa_educacao_per_capita",
+    "vbp_agricola_per_capita",
   ]);
 
-  const METRICAS_PERCENT = new Set(["acesso_agua", "acesso_esgoto", "coleta_lixo"]);
+  const METRICAS_PERCENT = new Set([
+    "acesso_agua", "acesso_esgoto", "coleta_lixo",
+    "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
+    "divida_rcl", "despesa_pessoal_rcl",
+  ]);
 
   return ({ object }) => {
     if (!object?.properties) return null;
@@ -211,6 +279,12 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
       } else if (metrica === "taxa_natalidade") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k hab.`;
+      } else if (metrica === "razao_sexo") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> h/100 mul.`;
+      } else if (metrica === "media_moradores") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b> mor./dom.`;
+      } else if (metrica === "taxa_envelhecimento") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>`;
       } else {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
       }
@@ -465,7 +539,7 @@ export default function App() {
         getLineColor: [20, 20, 20, 120],
         getLineWidth: 0.3,
         lineWidthMinPixels: 0.2,
-        pointRadiusMinPixels: 3,
+        pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
         updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
       }));

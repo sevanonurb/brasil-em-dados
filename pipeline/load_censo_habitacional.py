@@ -8,7 +8,7 @@ Tabelas consultadas:
   6805 — Domicílios por tipo de esgotamento sanitário (V381)
           classificação 11558: 46290=rede geral de esgoto/pluvial (adequado)
   6892 — Domicílios por destino do lixo (V381)
-          categoria 2520=coletado por serviço de limpeza/caçamba
+          classificação 67: 2520=Coletado (limpeza + caçamba)
 
 Resultado: censo.domicilios_municipio (cod_municipio 7 dígitos IBGE)
 """
@@ -80,10 +80,10 @@ def main():
     print("6805 — com rede de esgoto...")
     com_esgoto = sidra_get(6805, "11558[46290]")
 
-    # Tabela 6892: domicílios COM coleta de lixo por serviço de limpeza
-    # categoria 2520 — único valor positivo desta tabela
+    # Tabela 6892: domicílios COM lixo coletado (classificação 67, categoria 2520=Coletado)
+    # classificação 67 = "Destino do lixo"; categoria 2520 engloba coleta domiciliar + caçamba
     print("6892 — com coleta de lixo...")
-    com_lixo = sidra_get(6892, "2520[all]")
+    com_lixo = sidra_get(6892, "67[2520]")
 
     municipios = set(total_dom) | set(com_agua) | set(com_esgoto) | set(com_lixo)
     print(f"Municípios encontrados: {len(municipios)}")

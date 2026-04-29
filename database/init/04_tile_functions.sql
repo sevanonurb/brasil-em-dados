@@ -122,7 +122,15 @@ BEGIN
                     ideb_uf.ideb_anos_iniciais_media
                 WHEN v_metrica = 'ideb_anos_finais' THEN
                     ideb_uf.ideb_anos_finais_media
-                ELSE NULL
+                ELSE (
+                    -- Métricas adicionais: lê de api.metricas_municipio (agregação UF = média)
+                    SELECT AVG(mm.valor)::FLOAT8
+                    FROM api.metricas_municipio mm
+                    JOIN geo.municipios gm ON gm.cod_ibge_7 = mm.cod_municipio
+                    WHERE mm.metrica = v_metrica
+                      AND mm.ano = v_ano
+                      AND gm.cod_uf = u.cod_uf
+                )
             END AS valor_metrica,
             ST_AsMVTGeom(
                 ST_Transform(
@@ -321,7 +329,14 @@ BEGIN
                     ideb.ideb_anos_iniciais::FLOAT8
                 WHEN v_metrica = 'ideb_anos_finais' THEN
                     ideb.ideb_anos_finais::FLOAT8
-                ELSE NULL
+                ELSE (
+                    -- Métricas adicionais: lê de api.metricas_municipio
+                    SELECT mm.valor FROM api.metricas_municipio mm
+                    WHERE mm.cod_municipio = m.cod_ibge_7
+                      AND mm.metrica = v_metrica
+                      AND mm.ano = v_ano
+                    LIMIT 1
+                )
             END AS valor_metrica,
             ST_AsMVTGeom(
                 ST_Transform(
@@ -379,9 +394,43 @@ DECLARE
     v_faixa_max   SMALLINT := COALESCE((query_params->>'faixa_etaria_max')::SMALLINT, 17);
     v_sexo        CHAR(1)  := NULLIF(query_params->>'sexo', '');
 BEGIN
-    -- Zooms baixos (< 9): centroids amostrados coloridos pelo indicador municipal.
+    -- z < 6: centroides (dots) — todos os setores como pontos coloridos.
+    IF z < 6 THEN
+        SELECT ST_AsMVT(tile, 'setores', 4096, 'geom_mvt')
+        INTO result
+        FROM (
+            SELECT
+                sc.cod_setor,
+                sc.cod_municipio,
+                sc.populacao_total,
+                CASE v_metrica
+                    WHEN 'taxa_mortalidade'            THEN im.taxa_mortalidade_2023::FLOAT8
+                    WHEN 'taxa_homicidio'              THEN im.taxa_homicidio_2023::FLOAT8
+                    WHEN 'pib_per_capita'              THEN im.pib_per_capita_2022::FLOAT8
+                    WHEN 'receita_per_capita'          THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
+                    WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
+                    WHEN 'despesa_educacao_per_capita' THEN im.despesa_educacao_per_capita_2022::FLOAT8
+                    WHEN 'densidade_pop'               THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                    ELSE (
+                        SELECT mm.valor FROM api.metricas_municipio mm
+                        WHERE mm.cod_municipio = sc.cod_municipio
+                          AND mm.metrica = v_metrica
+                          AND mm.ano = v_ano
+                        LIMIT 1
+                    )
+                END AS valor_metrica,
+                ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
+            FROM geo.setores_censitarios sc
+            JOIN api.indicadores_municipio im ON im.cod_ibge_7 = sc.cod_municipio
+            WHERE sc.geom_3857 && bbox_3857
+              AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
+        ) tile
+        WHERE geom_mvt IS NOT NULL;
+        RETURN COALESCE(result, ''::bytea);
+    END IF;
+
+    -- 6 <= z < 9: polígonos territoriais completos.
     -- Usa api.indicadores_municipio (materializado) para evitar reprocessar SIM inteira.
-    -- Amostragem progressiva: 1/8 em z≤4, 1/4 em z=5, 1/2 em z≤7, todos em z8.
     IF z < 9 THEN
         SELECT ST_AsMVT(tile, 'setores', 4096, 'geom_mvt')
         INTO result
@@ -398,19 +447,19 @@ BEGIN
                     WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
                     WHEN 'despesa_educacao_per_capita' THEN im.despesa_educacao_per_capita_2022::FLOAT8
                     WHEN 'densidade_pop'               THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
-                    ELSE NULL
+                    ELSE (
+                        SELECT mm.valor FROM api.metricas_municipio mm
+                        WHERE mm.cod_municipio = sc.cod_municipio
+                          AND mm.metrica = v_metrica
+                          AND mm.ano = v_ano
+                        LIMIT 1
+                    )
                 END AS valor_metrica,
-                ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
+                ST_AsMVTGeom(sc.geom_3857, bbox_3857, 4096, 4, true) AS geom_mvt
             FROM geo.setores_censitarios sc
             JOIN api.indicadores_municipio im ON im.cod_ibge_7 = sc.cod_municipio
             WHERE sc.geom_3857 && bbox_3857
               AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
-              AND CASE
-                  WHEN z <= 4 THEN sc.cod_setor % 8 = 0
-                  WHEN z  = 5 THEN sc.cod_setor % 4 = 0
-                  WHEN z <= 7 THEN sc.cod_setor % 2 = 0
-                  ELSE TRUE
-              END
         ) tile
         WHERE geom_mvt IS NOT NULL;
         RETURN COALESCE(result, ''::bytea);
@@ -512,7 +561,14 @@ BEGIN
                     ideb.ideb_anos_iniciais::FLOAT8
                 WHEN v_metrica = 'ideb_anos_finais' THEN
                     ideb.ideb_anos_finais::FLOAT8
-                ELSE NULL
+                ELSE (
+                    -- Métricas adicionais: herda valor do município
+                    SELECT mm.valor FROM api.metricas_municipio mm
+                    WHERE mm.cod_municipio = sc.cod_municipio
+                      AND mm.metrica = v_metrica
+                      AND mm.ano = v_ano
+                    LIMIT 1
+                )
             END AS valor_metrica,
             -- geom_3857_simplified: pré-projetada e simplificada (~30m) para zoom 9-12
             ST_AsMVTGeom(sc.geom_3857_simplified, bbox_3857, 4096, 16, true) AS geom_mvt

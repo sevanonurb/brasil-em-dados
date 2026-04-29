@@ -32,6 +32,18 @@ export const ANOS_POR_METRICA_DEFAULT = {
   // Educação — IDEB (bienal)
   ideb_anos_iniciais:          [2023],
   ideb_anos_finais:            [2023],
+  // Censo 2022 — Demográficos (estático)
+  taxa_envelhecimento:         [2022],
+  razao_sexo:                  [2022],
+  taxa_alfabetizacao:          [2022],
+  domicilios_internet:         [2022],
+  media_moradores:             [2022],
+  pop_favelas_pct:             [2022],
+  // PAM — Produção Agrícola Municipal
+  vbp_agricola_per_capita:     [2022],
+  // Fiscal — Siconfi RGF
+  divida_rcl:                  [2022],
+  despesa_pessoal_rcl:         [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes

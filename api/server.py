@@ -37,6 +37,18 @@ FALLBACK = {
     # Educação — IDEB (bienal)
     "ideb_anos_iniciais":          [2023],
     "ideb_anos_finais":            [2023],
+    # Censo 2022 — Indicadores demográficos (estático)
+    "taxa_envelhecimento":         [2022],
+    "razao_sexo":                  [2022],
+    "taxa_alfabetizacao":          [2022],
+    "domicilios_internet":         [2022],
+    "media_moradores":             [2022],
+    "pop_favelas_pct":             [2022],
+    # Produção Agrícola Municipal (PAM — anual)
+    "vbp_agricola_per_capita":     [2022],
+    # Fiscal — Siconfi RGF (anual)
+    "divida_rcl":                  [2022],
+    "despesa_pessoal_rcl":         [2022],
 }
 
 
@@ -68,6 +80,14 @@ def query_anos():
                 "SELECT DISTINCT ano FROM educacao.ideb_municipios ORDER BY ano DESC"
             )
             anos_ideb = [r[0] for r in cur.fetchall()]
+
+            # Métricas adicionais: anos disponíveis por metrica em api.metricas_municipio
+            cur.execute(
+                "SELECT metrica, ARRAY_AGG(ano ORDER BY ano DESC) FROM ("
+                "  SELECT DISTINCT metrica, ano FROM api.metricas_municipio"
+                ") t GROUP BY metrica"
+            )
+            anos_metricas = {r[0]: r[1] for r in cur.fetchall()}
     finally:
         conn.close()
 
@@ -90,6 +110,18 @@ def query_anos():
         # Educação — IDEB (bienal)
         "ideb_anos_iniciais":          anos_ideb   or FALLBACK["ideb_anos_iniciais"],
         "ideb_anos_finais":            anos_ideb   or FALLBACK["ideb_anos_finais"],
+        # Censo 2022 — Indicadores demográficos (estático)
+        "taxa_envelhecimento":         [2022],
+        "razao_sexo":                  [2022],
+        "taxa_alfabetizacao":          [2022],
+        "domicilios_internet":         [2022],
+        "media_moradores":             [2022],
+        "pop_favelas_pct":             [2022],
+        # Produção Agrícola Municipal (PAM — anual, carregado via load_metricas_ibge.py)
+        "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2022]),
+        # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)
+        "divida_rcl":                  anos_metricas.get("divida_rcl", [2022]),
+        "despesa_pessoal_rcl":         anos_metricas.get("despesa_pessoal_rcl", [2022]),
     }
 
 

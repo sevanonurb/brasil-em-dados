@@ -41,27 +41,62 @@ const UFS_BRASIL = [
   { cod: 17, sigla: "TO", nome: "Tocantins" },
 ];
 
-const METRICAS = [
-  // ── Saúde ──────────────────────────────────────────────────────────────────
-  { value: "taxa_mortalidade",            label: "Mortalidade geral" },
-  { value: "taxa_homicidio",              label: "Homicídios" },
-  { value: "taxa_natalidade",             label: "Taxa de natalidade" },
-  { value: "leitos_sus_por_1k",           label: "Leitos SUS (por 1k hab.)" },
-  { value: "medicos_por_10k",             label: "Médicos (por 10k hab.)" },
-  // ── Economia ───────────────────────────────────────────────────────────────
-  { value: "pib_per_capita",              label: "PIB per capita" },
-  { value: "receita_per_capita",          label: "Receita municipal per capita" },
-  { value: "despesa_saude_per_capita",    label: "Gasto em saúde per capita" },
-  { value: "despesa_educacao_per_capita", label: "Gasto em educação per capita" },
-  // ── Saneamento (Censo 2022) ────────────────────────────────────────────────
-  { value: "acesso_agua",                 label: "Acesso à água encanada (%)" },
-  { value: "acesso_esgoto",               label: "Acesso à rede de esgoto (%)" },
-  { value: "coleta_lixo",                 label: "Coleta de lixo (%)" },
-  // ── Educação (IDEB) ────────────────────────────────────────────────────────
-  { value: "ideb_anos_iniciais",          label: "IDEB — anos iniciais" },
-  { value: "ideb_anos_finais",            label: "IDEB — anos finais" },
-  // ── Demográfico ────────────────────────────────────────────────────────────
-  { value: "densidade_pop",               label: "Densidade demográfica" },
+// Grupos de métricas para o <select> com <optgroup>
+const GRUPOS_METRICAS = [
+  {
+    label: "Saúde",
+    opcoes: [
+      { value: "taxa_mortalidade",            label: "Mortalidade geral" },
+      { value: "taxa_homicidio",              label: "Homicídios" },
+      { value: "taxa_natalidade",             label: "Natalidade (nasc./1k hab.)" },
+      { value: "leitos_sus_por_1k",           label: "Leitos SUS (por 1k hab.)" },
+      { value: "medicos_por_10k",             label: "Médicos (por 10k hab.)" },
+    ],
+  },
+  {
+    label: "Economia",
+    opcoes: [
+      { value: "pib_per_capita",              label: "PIB per capita" },
+      { value: "receita_per_capita",          label: "Receita municipal per capita" },
+      { value: "despesa_saude_per_capita",    label: "Gasto em saúde per capita" },
+      { value: "despesa_educacao_per_capita", label: "Gasto em educação per capita" },
+      { value: "vbp_agricola_per_capita",     label: "VBP agrícola per capita" },
+    ],
+  },
+  {
+    label: "Finanças Públicas (RGF)",
+    opcoes: [
+      { value: "divida_rcl",                  label: "Dívida consolidada / RCL (%)" },
+      { value: "despesa_pessoal_rcl",         label: "Despesa pessoal / RCL (%)" },
+    ],
+  },
+  {
+    label: "Saneamento (Censo 2022)",
+    opcoes: [
+      { value: "acesso_agua",                 label: "Acesso à água encanada (%)" },
+      { value: "acesso_esgoto",               label: "Acesso à rede de esgoto (%)" },
+      { value: "coleta_lixo",                 label: "Coleta de lixo (%)" },
+    ],
+  },
+  {
+    label: "Educação",
+    opcoes: [
+      { value: "ideb_anos_iniciais",          label: "IDEB — anos iniciais" },
+      { value: "ideb_anos_finais",            label: "IDEB — anos finais" },
+      { value: "taxa_alfabetizacao",          label: "Taxa de alfabetização 15+ (%)" },
+    ],
+  },
+  {
+    label: "Demográfico (Censo 2022)",
+    opcoes: [
+      { value: "densidade_pop",               label: "Densidade demográfica (hab/km²)" },
+      { value: "taxa_envelhecimento",         label: "Índice de envelhecimento" },
+      { value: "razao_sexo",                  label: "Razão de sexo (h/100 mulheres)" },
+      { value: "media_moradores",             label: "Média de moradores por domicílio" },
+      { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
+      { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
+    ],
+  },
 ];
 
 const CID10_CAPITULOS = [
@@ -275,8 +310,12 @@ export function PainelControles({
               onChange={e => onMetricaChange(e.target.value)}
               style={selectStyle}
             >
-              {METRICAS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
+              {GRUPOS_METRICAS.map(grupo => (
+                <optgroup key={grupo.label} label={grupo.label}>
+                  {grupo.opcoes.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
