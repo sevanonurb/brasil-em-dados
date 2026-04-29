@@ -45,8 +45,12 @@ FALLBACK = {
     "media_moradores":             [2022],
     "pop_favelas_pct":             [2022],
     # Censo 2022 Amostra — Renda e Trabalho (estático)
+    "renda_domiciliar_per_capita": [2022],
+    "renda_domiciliar_mediana_pc": [2022],
     "renda_media_trabalho":        [2022],
     "renda_mediana_trabalho":      [2022],
+    # Censo 2022 Amostra — Educação (estático)
+    "media_anos_estudo":           [2022],
     # Produção Agrícola Municipal (PAM — anual)
     "vbp_agricola_per_capita":     [2022],
     # Fiscal — Siconfi RGF (anual)
@@ -121,8 +125,12 @@ def query_anos():
         "media_moradores":             [2022],
         "pop_favelas_pct":             [2022],
         # Censo 2022 Amostra — Renda e Trabalho (estático)
+        "renda_domiciliar_per_capita": [2022],
+        "renda_domiciliar_mediana_pc": [2022],
         "renda_media_trabalho":        [2022],
         "renda_mediana_trabalho":      [2022],
+        # Censo 2022 Amostra — Educação (estático)
+        "media_anos_estudo":           [2022],
         # Produção Agrícola Municipal (PAM — anual, carregado via load_metricas_ibge.py)
         "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2022]),
         # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)

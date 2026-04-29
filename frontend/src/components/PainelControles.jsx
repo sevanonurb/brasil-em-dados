@@ -89,8 +89,16 @@ const GRUPOS_METRICAS = [
   {
     label: "Renda e Trabalho (Censo 2022 Amostra)",
     opcoes: [
-      { value: "renda_media_trabalho",        label: "Renda média do trabalho (R$)" },
-      { value: "renda_mediana_trabalho",      label: "Renda mediana do trabalho (R$)" },
+      { value: "renda_domiciliar_per_capita",  label: "Renda domiciliar per capita — média (R$)" },
+      { value: "renda_domiciliar_mediana_pc",  label: "Renda domiciliar per capita — mediana (R$)" },
+      { value: "renda_media_trabalho",         label: "Renda média do trabalho (R$)" },
+      { value: "renda_mediana_trabalho",       label: "Renda mediana do trabalho (R$)" },
+    ],
+  },
+  {
+    label: "Educação — Censo 2022 Amostra",
+    opcoes: [
+      { value: "media_anos_estudo",            label: "Média de anos de estudo (11+)" },
     ],
   },
   {

@@ -30,8 +30,11 @@ const METRICAS_LABELS = {
   vbp_agricola_per_capita:     "VBP agrícola per capita (R$)",
   divida_rcl:                  "Dívida consolidada / RCL (%)",
   despesa_pessoal_rcl:         "Despesa pessoal / RCL (%)",
+  renda_domiciliar_per_capita: "Renda domiciliar per capita — média (R$)",
+  renda_domiciliar_mediana_pc: "Renda domiciliar per capita — mediana (R$)",
   renda_media_trabalho:        "Renda média do trabalho (R$)",
   renda_mediana_trabalho:      "Renda mediana do trabalho (R$)",
+  media_anos_estudo:           "Média de anos de estudo (11+)",
 };
 
 const METRICAS_REAIS = new Set([
@@ -39,6 +42,7 @@ const METRICAS_REAIS = new Set([
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
   "vbp_agricola_per_capita",
   "renda_media_trabalho", "renda_mediana_trabalho",
+  "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
 ]);
 
 const METRICAS_PERCENT = new Set([
@@ -62,8 +66,8 @@ function formatarValor(v, metrica) {
   if (metrica === "leitos_sus_por_1k") {
     return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
   }
-  if (metrica === "media_moradores") {
-    return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  if (metrica === "media_moradores" || metrica === "media_anos_estudo") {
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
@@ -75,6 +79,9 @@ const METRICAS_MELHOR_ALTO = new Set([
   "ideb_anos_iniciais", "ideb_anos_finais",
   "taxa_alfabetizacao", "domicilios_internet",
   "vbp_agricola_per_capita",
+  "media_anos_estudo",
+  "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
+  "renda_media_trabalho", "renda_mediana_trabalho",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

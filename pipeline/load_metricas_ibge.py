@@ -305,6 +305,99 @@ def carregar_favelas(conn):
 
 # ─── Censo 2022 — Renda e Trabalho ───────────────────────────────────────────
 
+def carregar_renda_domiciliar(conn):
+    """
+    T10295 — Rendimento nominal domiciliar per capita (Censo 2022 Amostra).
+    V13431 = Valor médio mensal; V13534 = Valor mediano mensal.
+    Classificações filtradas para Total.
+    """
+    print("\n=== T10295: Rendimento domiciliar per capita (Censo 2022 Amostra) ===")
+    url = (
+        f"{SIDRA_BASE}/10295/periodos/2022/variaveis/13431,13534"
+        f"?localidades=N6[all]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10295 falhou")
+        return
+
+    media_map: dict[int, float] = {}
+    mediana_map: dict[int, float] = {}
+    for var_block in r.json():
+        var_id = str(var_block.get("id", ""))
+        for res_item in var_block.get("resultados", []):
+            cats = res_item.get("classificacoes", [])
+            if not all(list(c.get("categoria", {}).values()) == ["Total"] for c in cats):
+                continue
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        val = float(val_str)
+                        if var_id == "13431":
+                            media_map[cod] = val
+                        elif var_id == "13534":
+                            mediana_map[cod] = val
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    média → {len(media_map)} / mediana → {len(mediana_map)} municípios")
+    rows = (
+        [(cod, "renda_domiciliar_per_capita", 2022, v) for cod, v in media_map.items()]
+        + [(cod, "renda_domiciliar_mediana_pc", 2022, v) for cod, v in mediana_map.items()]
+    )
+    upsert_metricas(rows, conn)
+
+
+def carregar_anos_estudo(conn):
+    """
+    T10062 — Número médio de anos de estudo das pessoas de 11 anos ou mais (Censo 2022 Amostra).
+    Variável 13285.
+    """
+    print("\n=== T10062: Média de anos de estudo ===")
+    url = f"{SIDRA_BASE}/10062/periodos/2022/variaveis/13285?localidades=N6[all]"
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10062 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            cats = res_item.get("classificacoes", [])
+            if not all(list(c.get("categoria", {}).values()) == ["Total"] for c in cats):
+                continue
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    rows = [(cod, "media_anos_estudo", 2022, v) for cod, v in result.items()]
+    upsert_metricas(rows, conn)
+
+
 def carregar_renda_trabalho(conn):
     """
     T10280 — Rendimento nominal médio mensal do trabalho (Censo 2022 Amostra).
@@ -496,6 +589,8 @@ def main():
             carregar_internet(conn)
             carregar_media_moradores(conn)
             carregar_favelas(conn)
+            carregar_renda_domiciliar(conn)
+            carregar_anos_estudo(conn)
             carregar_renda_trabalho(conn)
 
         if not args.skip_pam:

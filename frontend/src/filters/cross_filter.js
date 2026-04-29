@@ -40,8 +40,12 @@ export const ANOS_POR_METRICA_DEFAULT = {
   media_moradores:             [2022],
   pop_favelas_pct:             [2022],
   // Censo 2022 Amostra — Renda e Trabalho (estático)
+  renda_domiciliar_per_capita: [2022],
+  renda_domiciliar_mediana_pc: [2022],
   renda_media_trabalho:        [2022],
   renda_mediana_trabalho:      [2022],
+  // Censo 2022 Amostra — Educação
+  media_anos_estudo:           [2022],
   // PAM — Produção Agrícola Municipal
   vbp_agricola_per_capita:     [2022],
   // Fiscal — Siconfi RGF

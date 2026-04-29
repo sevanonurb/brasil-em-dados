@@ -166,7 +166,17 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0,  max: 80  },
     MUNICIPAL: { min: 0,  max: 120 },
   },
-  // Renda do trabalho (Censo 2022 Amostra) — em R$ nominais
+  // Renda (Censo 2022 Amostra) — em R$ nominais
+  renda_domiciliar_per_capita: {
+    NACIONAL:  { min: 500,  max: 3000  },
+    ESTADUAL:  { min: 300,  max: 6000  },
+    MUNICIPAL: { min: 200,  max: 8000  },
+  },
+  renda_domiciliar_mediana_pc: {
+    NACIONAL:  { min: 400,  max: 2000  },
+    ESTADUAL:  { min: 200,  max: 4000  },
+    MUNICIPAL: { min: 100,  max: 5000  },
+  },
   renda_media_trabalho: {
     NACIONAL:  { min: 1000, max: 5000  },
     ESTADUAL:  { min: 800,  max: 8000  },
@@ -176,6 +186,12 @@ const METRICAS_RANGES = {
     NACIONAL:  { min: 800,  max: 3000  },
     ESTADUAL:  { min: 600,  max: 5000  },
     MUNICIPAL: { min: 400,  max: 6000  },
+  },
+  // Educação (Censo 2022 Amostra)
+  media_anos_estudo: {
+    NACIONAL:  { min: 4, max: 12 },
+    ESTADUAL:  { min: 2, max: 14 },
+    MUNICIPAL: { min: 1, max: 16 },
   },
 };
 
@@ -245,8 +261,11 @@ function makeTooltip(metrica, cid10) {
     media_moradores:             "Média de moradores",
     domicilios_internet:         "Domicílios c/ internet",
     pop_favelas_pct:             "Pop. em favelas",
+    renda_domiciliar_per_capita: "Renda dom. per capita",
+    renda_domiciliar_mediana_pc: "Renda dom. mediana pc",
     renda_media_trabalho:        "Renda média trabalho",
     renda_mediana_trabalho:      "Renda mediana trabalho",
+    media_anos_estudo:           "Média anos de estudo",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
@@ -257,6 +276,7 @@ function makeTooltip(metrica, cid10) {
     "despesa_saude_per_capita", "despesa_educacao_per_capita",
     "vbp_agricola_per_capita",
     "renda_media_trabalho", "renda_mediana_trabalho",
+    "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   ]);
 
   const METRICAS_PERCENT = new Set([
