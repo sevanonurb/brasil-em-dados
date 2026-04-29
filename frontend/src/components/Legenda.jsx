@@ -30,12 +30,15 @@ const METRICAS_LABELS = {
   vbp_agricola_per_capita:     "VBP agrícola per capita (R$)",
   divida_rcl:                  "Dívida consolidada / RCL (%)",
   despesa_pessoal_rcl:         "Despesa pessoal / RCL (%)",
+  renda_media_trabalho:        "Renda média do trabalho (R$)",
+  renda_mediana_trabalho:      "Renda mediana do trabalho (R$)",
 };
 
 const METRICAS_REAIS = new Set([
   "pib_per_capita", "receita_per_capita",
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
   "vbp_agricola_per_capita",
+  "renda_media_trabalho", "renda_mediana_trabalho",
 ]);
 
 const METRICAS_PERCENT = new Set([

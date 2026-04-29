@@ -303,6 +303,130 @@ def carregar_favelas(conn):
     upsert_metricas(rows, conn)
 
 
+# ─── Censo 2022 — Renda e Trabalho ───────────────────────────────────────────
+
+def carregar_renda_trabalho(conn):
+    """
+    T10280 — Rendimento nominal médio mensal do trabalho (Censo 2022 Amostra).
+    Variável 13536 = Valor do rendimento nominal médio mensal de todos os trabalhos.
+    Variável 13537 = Valor do rendimento nominal mediano mensal de todos os trabalhos.
+    Classificação: Total (sem filtros adicionais).
+    """
+    print("\n=== T10280: Rendimento médio/mediano do trabalho (Censo 2022 Amostra) ===")
+    url = (
+        f"{SIDRA_BASE}/10280/periodos/2022/variaveis/13536,13537"
+        f"?localidades=N6[all]"
+    )
+    print(f"  GET {url}")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            print(f"    HTTP {r.status_code}, aguardando 10s...")
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            print(f"    Timeout tentativa {tentativa+1}/3, aguardando 10s...")
+            time.sleep(10)
+    else:
+        print("  ERRO: T10280 falhou após 3 tentativas")
+        return
+
+    media_map: dict[int, float] = {}
+    mediana_map: dict[int, float] = {}
+
+    # Top-level structure: [{id: "13536", variavel: "...", resultados: [...]}, ...]
+    for var_block in r.json():
+        var_id = str(var_block.get("id", ""))
+        for res_item in var_block.get("resultados", []):
+            # Pegar apenas linha com todos os classificadores em "Total"
+            cats = res_item.get("classificacoes", [])
+            is_total = all(
+                list(cat.get("categoria", {}).values()) == ["Total"]
+                for cat in cats
+            )
+            if not is_total:
+                continue
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        val = float(val_str)
+                        if var_id == "13536":
+                            media_map[cod] = val
+                        elif var_id == "13537":
+                            mediana_map[cod] = val
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    média → {len(media_map)} municípios, mediana → {len(mediana_map)} municípios")
+
+    rows = []
+    for cod, v in media_map.items():
+        rows.append((cod, "renda_media_trabalho", 2022, v))
+    for cod, v in mediana_map.items():
+        rows.append((cod, "renda_mediana_trabalho", 2022, v))
+    upsert_metricas(rows, conn)
+
+
+def carregar_internet(conn):
+    """
+    T9936 — % domicílios com conexão domiciliar à internet (Censo 2022 Amostra).
+    Classificação 2072 'Existência de conexão domiciliar à Internet':
+      77584 = Total, 77585 = Sim (com internet), 77586 = Não
+    """
+    print("\n=== T9936: Domicílios com conexão à internet ===")
+
+    def fetch_v381(classif_param: str = "") -> dict[int, float]:
+        url = (
+            f"{SIDRA_BASE}/9936/periodos/2022/variaveis/381"
+            f"?localidades=N6[all]{classif_param}"
+        )
+        print(f"  GET {url[:100]}...")
+        for tentativa in range(3):
+            try:
+                r = requests.get(url, timeout=120)
+                if r.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            return {}
+        result: dict[int, float] = {}
+        for var_block in r.json():
+            for res_item in var_block.get("resultados", []):
+                for serie in res_item.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val_str = serie["serie"].get("2022", "-")
+                        if val_str and val_str not in ("-", "...", "X", ""):
+                            result[cod] = float(val_str)
+                    except (ValueError, KeyError):
+                        pass
+        return result
+
+    total_map = fetch_v381()
+    print(f"    Total domicílios: {len(total_map)} municípios")
+    if not total_map:
+        return
+
+    # Category 77585 = "Sim" (com internet)
+    com_map = fetch_v381("&classificacao=2072[77585]")
+    print(f"    Com internet: {len(com_map)} municípios")
+    if not com_map:
+        return
+
+    rows = []
+    for cod, com in com_map.items():
+        total = total_map.get(cod)
+        if total and total > 0:
+            rows.append((cod, "domicilios_internet", 2022, com / total * 100))
+    print(f"    % calculado para {len(rows)} municípios")
+    upsert_metricas(rows, conn)
+
+
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
 def carregar_pam(conn, anos: list[int]):
@@ -372,6 +496,7 @@ def main():
             carregar_internet(conn)
             carregar_media_moradores(conn)
             carregar_favelas(conn)
+            carregar_renda_trabalho(conn)
 
         if not args.skip_pam:
             carregar_pam(conn, args.anos_pam)

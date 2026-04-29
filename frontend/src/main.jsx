@@ -166,6 +166,17 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0,  max: 80  },
     MUNICIPAL: { min: 0,  max: 120 },
   },
+  // Renda do trabalho (Censo 2022 Amostra) — em R$ nominais
+  renda_media_trabalho: {
+    NACIONAL:  { min: 1000, max: 5000  },
+    ESTADUAL:  { min: 800,  max: 8000  },
+    MUNICIPAL: { min: 600,  max: 10000 },
+  },
+  renda_mediana_trabalho: {
+    NACIONAL:  { min: 800,  max: 3000  },
+    ESTADUAL:  { min: 600,  max: 5000  },
+    MUNICIPAL: { min: 400,  max: 6000  },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -234,6 +245,8 @@ function makeTooltip(metrica, cid10) {
     media_moradores:             "Média de moradores",
     domicilios_internet:         "Domicílios c/ internet",
     pop_favelas_pct:             "Pop. em favelas",
+    renda_media_trabalho:        "Renda média trabalho",
+    renda_mediana_trabalho:      "Renda mediana trabalho",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
@@ -243,6 +256,7 @@ function makeTooltip(metrica, cid10) {
     "pib_per_capita", "receita_per_capita",
     "despesa_saude_per_capita", "despesa_educacao_per_capita",
     "vbp_agricola_per_capita",
+    "renda_media_trabalho", "renda_mediana_trabalho",
   ]);
 
   const METRICAS_PERCENT = new Set([
