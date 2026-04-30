@@ -57,6 +57,10 @@ FALLBACK = {
     "taxa_deficiencia":            [2022],
     # Censo 2022 — Demográficos adicionais (estático)
     "idade_mediana":               [2022],
+    # PIB setorial — T5938 (anual, defasagem ~2 anos)
+    "pct_pib_agropecuaria":        [2021],
+    "pct_pib_industria":           [2021],
+    "pct_pib_servicos":            [2021],
     # Produção Agrícola Municipal (PAM — anual)
     "vbp_agricola_per_capita":     [2022],
     # Fiscal — Siconfi RGF (anual)
@@ -143,6 +147,10 @@ def query_anos():
         "taxa_deficiencia":            [2022],
         # Censo 2022 — Demográficos adicionais (estático)
         "idade_mediana":               anos_metricas.get("idade_mediana", [2022]),
+        # PIB setorial — T5938 (anual, defasagem ~2 anos)
+        "pct_pib_agropecuaria":        anos_metricas.get("pct_pib_agropecuaria", [2021]),
+        "pct_pib_industria":           anos_metricas.get("pct_pib_industria", [2021]),
+        "pct_pib_servicos":            anos_metricas.get("pct_pib_servicos", [2021]),
         # Produção Agrícola Municipal (PAM — anual, carregado via load_metricas_ibge.py)
         "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2022]),
         # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)

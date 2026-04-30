@@ -64,6 +64,14 @@ const GRUPOS_METRICAS = [
     ],
   },
   {
+    label: "Estrutura do PIB (% setor)",
+    opcoes: [
+      { value: "pct_pib_agropecuaria",        label: "Agropecuária — % do PIB" },
+      { value: "pct_pib_industria",           label: "Indústria — % do PIB" },
+      { value: "pct_pib_servicos",            label: "Serviços — % do PIB" },
+    ],
+  },
+  {
     label: "Finanças Públicas (RGF)",
     opcoes: [
       { value: "divida_rcl",                  label: "Dívida consolidada / RCL (%)" },

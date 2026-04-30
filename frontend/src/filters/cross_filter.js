@@ -52,6 +52,10 @@ export const ANOS_POR_METRICA_DEFAULT = {
   taxa_deficiencia:            [2022],
   // Censo 2022 — Demográficos adicionais
   idade_mediana:               [2022],
+  // PIB setorial — T5938 (anual, defasagem ~2 anos)
+  pct_pib_agropecuaria:        [2021],
+  pct_pib_industria:           [2021],
+  pct_pib_servicos:            [2021],
   // PAM — Produção Agrícola Municipal
   vbp_agricola_per_capita:     [2022],
   // Fiscal — Siconfi RGF

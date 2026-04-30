@@ -683,6 +683,56 @@ def carregar_internet(conn):
 
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
+def carregar_setor_pib(conn, anos: list[int]):
+    """
+    T5938 — Participação setorial no PIB municipal (%).
+    V516 = agropecuária, V519 = indústria, V6574 = serviços excl. adm pública.
+    Disponível para 2018-2021 (dado municipal com defasagem ~2 anos).
+    """
+    print("\n=== T5938: Participação setorial no PIB municipal ===")
+    varmap = {"516": "pct_pib_agropecuaria", "519": "pct_pib_industria", "6574": "pct_pib_servicos"}
+
+    for ano in anos:
+        url = (
+            f"{SIDRA_BASE}/5938/periodos/{ano}/variaveis/516,519,6574"
+            f"?localidades=N6[all]"
+        )
+        print(f"  GET T5938 V516,519,6574 {ano} ...")
+        for tentativa in range(3):
+            try:
+                r = requests.get(url, timeout=120)
+                if r.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            print(f"  ERRO: T5938 {ano} falhou")
+            continue
+
+        rows = []
+        for var_block in r.json():
+            var_id = str(var_block.get("id", ""))
+            metrica = varmap.get(var_id)
+            if not metrica:
+                continue
+            for res_item in var_block.get("resultados", []):
+                for serie in res_item.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val_str = serie["serie"].get(str(ano), "-")
+                        if val_str and val_str not in ("-", "...", "X", ""):
+                            rows.append((cod, metrica, ano, float(val_str)))
+                    except (ValueError, KeyError):
+                        pass
+
+        n_by_metrica = {}
+        for _, m, _, _ in rows:
+            n_by_metrica[m] = n_by_metrica.get(m, 0) + 1
+        print(f"    {ano}: {n_by_metrica}")
+        upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -724,6 +774,11 @@ def main():
     parser.add_argument("--anos-pam", nargs="+", type=int,
                         default=[2019, 2020, 2021, 2022],
                         help="Anos para baixar dados da PAM (padrão: 2019-2022)")
+    parser.add_argument("--skip-pib-setor", action="store_true",
+                        help="Pula as participações setoriais do PIB (T5938)")
+    parser.add_argument("--anos-pib-setor", nargs="+", type=int,
+                        default=[2019, 2020, 2021],
+                        help="Anos para PIB setorial (padrão: 2019-2021)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -746,6 +801,9 @@ def main():
             carregar_renda_trabalho(conn)
             carregar_deficiencia(conn)
             carregar_superior_completo(conn)
+
+        if not args.skip_pib_setor:
+            carregar_setor_pib(conn, args.anos_pib_setor)
 
         if not args.skip_pam:
             carregar_pam(conn, args.anos_pam)

@@ -39,6 +39,9 @@ const METRICAS_LABELS = {
   taxa_deficiencia:            "Taxa de deficiência (%)",
   taxa_ocupacao:               "Nível de ocupação 10+ (%)",
   idade_mediana:               "Idade mediana (anos)",
+  pct_pib_agropecuaria:        "Agropecuária — % do PIB municipal",
+  pct_pib_industria:           "Indústria — % do PIB municipal",
+  pct_pib_servicos:            "Serviços — % do PIB municipal",
 };
 
 const METRICAS_REAIS = new Set([
@@ -55,6 +58,7 @@ const METRICAS_PERCENT = new Set([
   "divida_rcl", "despesa_pessoal_rcl",
   "pct_superior_completo", "taxa_deficiencia",
   "taxa_ocupacao",
+  "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
 ]);
 
 function formatarValor(v, metrica) {

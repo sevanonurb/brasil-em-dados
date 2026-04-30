@@ -213,6 +213,22 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 15, max: 55 },
     MUNICIPAL: { min: 15, max: 60 },
   },
+  // PIB setorial (%) — São Paulo: agro 0.01%, ind 12%, srv 83%
+  pct_pib_agropecuaria: {
+    NACIONAL:  { min: 0,  max: 30 },
+    ESTADUAL:  { min: 0,  max: 60 },
+    MUNICIPAL: { min: 0,  max: 80 },
+  },
+  pct_pib_industria: {
+    NACIONAL:  { min: 0,  max: 30 },
+    ESTADUAL:  { min: 0,  max: 50 },
+    MUNICIPAL: { min: 0,  max: 70 },
+  },
+  pct_pib_servicos: {
+    NACIONAL:  { min: 30, max: 90 },
+    ESTADUAL:  { min: 20, max: 95 },
+    MUNICIPAL: { min: 10, max: 98 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -290,6 +306,9 @@ function makeTooltip(metrica, cid10) {
     taxa_deficiencia:            "Taxa de deficiência",
     taxa_ocupacao:               "Nível de ocupação",
     idade_mediana:               "Idade mediana",
+    pct_pib_agropecuaria:        "Agropecuária / PIB",
+    pct_pib_industria:           "Indústria / PIB",
+    pct_pib_servicos:            "Serviços / PIB",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
@@ -309,6 +328,7 @@ function makeTooltip(metrica, cid10) {
     "divida_rcl", "despesa_pessoal_rcl",
     "pct_superior_completo", "taxa_deficiencia",
     "taxa_ocupacao",
+    "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
   ]);
 
   return ({ object }) => {
