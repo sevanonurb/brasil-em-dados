@@ -77,6 +77,10 @@ export const ANOS_POR_METRICA_DEFAULT = {
   // Censo 2022 — Migração e Escolarização (estático)
   taxa_migracao:               [2022],
   taxa_escolarizacao_1517:     [2022],
+  // Censo 2022 — Mercado de Trabalho (estático)
+  taxa_desemprego:             [2022],
+  taxa_pendular:               [2022],
+  taxa_informalidade:          [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes

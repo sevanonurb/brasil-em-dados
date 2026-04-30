@@ -130,6 +130,14 @@ const GRUPOS_METRICAS = [
     ],
   },
   {
+    label: "Mercado de Trabalho (Censo 2022)",
+    opcoes: [
+      { value: "taxa_desemprego",              label: "Taxa de desemprego — 14+ (%)" },
+      { value: "taxa_informalidade",           label: "Informalidade no trabalho (%)" },
+      { value: "taxa_pendular",                label: "Pendularidade laboral — trabalha em outro município (%)" },
+    ],
+  },
+  {
     label: "Raça e Etnia (Censo 2022)",
     opcoes: [
       { value: "pct_indigena",                label: "Pop. indígena (autodeclarada) (%)" },

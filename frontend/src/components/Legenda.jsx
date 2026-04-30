@@ -39,6 +39,9 @@ const METRICAS_LABELS = {
   empresas_por_1k:             "Empresas e organizações (por 1k hab.)",
   taxa_migracao:               "Imigração inter-municipal (%)",
   taxa_escolarizacao_1517:     "Taxa de escolarização 15-17 anos (%)",
+  taxa_desemprego:             "Taxa de desemprego — 14+ (%)",
+  taxa_pendular:               "Pendularidade laboral — trabalha em outro município (%)",
+  taxa_informalidade:          "Taxa de informalidade no trabalho (%)",
   renda_domiciliar_per_capita: "Renda domiciliar per capita — média (R$)",
   renda_domiciliar_mediana_pc: "Renda domiciliar per capita — mediana (R$)",
   renda_media_trabalho:        "Renda média do trabalho (R$)",
@@ -72,6 +75,7 @@ const METRICAS_PERCENT = new Set([
   "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
   "pct_mecanizado", "pct_financiamento",
   "taxa_migracao", "taxa_escolarizacao_1517",
+  "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
 ]);
 
 function formatarValor(v, metrica) {

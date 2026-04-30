@@ -284,6 +284,21 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 40, max: 100 },
     MUNICIPAL: { min: 40, max: 100 },
   },
+  taxa_desemprego: {
+    NACIONAL:  { min: 0, max: 15  },
+    ESTADUAL:  { min: 0, max: 25  },
+    MUNICIPAL: { min: 0, max: 40  },
+  },
+  taxa_pendular: {
+    NACIONAL:  { min: 0, max: 20  },
+    ESTADUAL:  { min: 0, max: 40  },
+    MUNICIPAL: { min: 0, max: 70  },
+  },
+  taxa_informalidade: {
+    NACIONAL:  { min: 0, max: 50  },
+    ESTADUAL:  { min: 0, max: 70  },
+    MUNICIPAL: { min: 0, max: 90  },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -377,6 +392,9 @@ function makeTooltip(metrica, cid10) {
     empresas_por_1k:             "Empresas / 1k hab.",
     taxa_migracao:               "Imigração inter-mun.",
     taxa_escolarizacao_1517:     "Escolarização 15-17",
+    taxa_desemprego:             "Desemprego",
+    taxa_pendular:               "Pendularidade laboral",
+    taxa_informalidade:          "Informalidade",
   };
 
   const METRICAS_REAIS = new Set([
@@ -397,6 +415,7 @@ function makeTooltip(metrica, cid10) {
     "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
     "pct_mecanizado", "pct_financiamento",
     "taxa_migracao", "taxa_escolarizacao_1517",
+    "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
   ]);
 
   return ({ object }) => {

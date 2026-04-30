@@ -1250,6 +1250,116 @@ def carregar_setor_pib(conn, anos: list[int]):
         upsert_metricas(rows, conn)
 
 
+def carregar_desemprego(conn):
+    """
+    T9517 V1641 — Taxa de desemprego (Censo 2022).
+    Fórmula: desocupados / força de trabalho × 100.
+    C629: 32386=força de trabalho, 32446=desocupada.
+    Cobre 5570 municípios.
+    """
+    print("\n=== T9517: Taxa de desemprego — Censo 2022 ===")
+
+    params_base = "2[6794]|86[95251]|1568[120704]"
+
+    def fetch_cat(cat_id: int) -> dict[int, float]:
+        url = (
+            f"{SIDRA_BASE}/9517/periodos/2022/variaveis/1641"
+            f"?localidades=N6[all]&classificacao=629[{cat_id}]|{params_base}"
+        )
+        r = requests.get(url, timeout=120)
+        result = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            result[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        return result
+
+    forca = fetch_cat(32386)  # força de trabalho
+    desoc = fetch_cat(32446)  # desocupados
+
+    print(f"  força de trabalho: {len(forca)} mun. | desocupados: {len(desoc)} mun.")
+    rows = []
+    for cod, ft in forca.items():
+        if ft > 0 and cod in desoc:
+            rows.append((cod, "taxa_desemprego", 2022, desoc[cod] / ft * 100))
+    print(f"  taxa_desemprego: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_pendular(conn):
+    """
+    T10329 V1013373 — % trabalhadores que trabalham em outro município (Censo 2022).
+    C469[12188] = Outro município, C2[6794] = Total sexo, C386[9680] = Total renda.
+    Cobre 5570 municípios.
+    """
+    print("\n=== T10329: Taxa de pendularidade — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/10329/periodos/2022/variaveis/1013373"
+        f"?localidades=N6[all]&classificacao=469[12188]|2[6794]|386[9680]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "taxa_pendular", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  taxa_pendular: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_informalidade(conn):
+    """
+    T10261 V1004090 — Taxa de informalidade no trabalho (Censo 2022).
+    Soma das categorias informais:
+      C11913[31723] = setor privado sem carteira
+      C11913[79368] = doméstico sem carteira
+      C11913[45937] = conta própria sem CNPJ
+      C11913[31731] = trabalhador familiar auxiliar
+    Cobre 5570 municípios.
+    """
+    print("\n=== T10261: Taxa de informalidade — Censo 2022 ===")
+
+    categorias_informais = [31723, 79368, 45937, 31731]
+    params_base = "2[6794]|86[95251]"
+
+    acumulador: dict[int, float] = {}
+    for cat_id in categorias_informais:
+        url = (
+            f"{SIDRA_BASE}/10261/periodos/2022/variaveis/1004090"
+            f"?localidades=N6[all]&classificacao=11913[{cat_id}]|{params_base}"
+        )
+        r = requests.get(url, timeout=120)
+        count = 0
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            acumulador[cod] = acumulador.get(cod, 0.0) + float(val)
+                            count += 1
+                    except (ValueError, KeyError):
+                        pass
+        print(f"  C11913[{cat_id}]: {count} mun.")
+
+    rows = [(cod, "taxa_informalidade", 2022, v) for cod, v in acumulador.items()]
+    print(f"  taxa_informalidade: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1321,6 +1431,12 @@ def main():
                         help="Pula a taxa de migração (T10160)")
     parser.add_argument("--skip-escolarizacao", action="store_true",
                         help="Pula a taxa de escolarização 15-17 anos (T10140)")
+    parser.add_argument("--skip-desemprego", action="store_true",
+                        help="Pula a taxa de desemprego (T9517)")
+    parser.add_argument("--skip-pendular", action="store_true",
+                        help="Pula a taxa de pendularidade (T10329)")
+    parser.add_argument("--skip-informalidade", action="store_true",
+                        help="Pula a taxa de informalidade (T10261)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1362,6 +1478,16 @@ def main():
 
         if not args.skip_escolarizacao:
             carregar_escolarizacao_1517(conn)
+
+        if not args.skip_desemprego:
+            print("\n──── Censo 2022 — Mercado de Trabalho ────")
+            carregar_desemprego(conn)
+
+        if not args.skip_pendular:
+            carregar_pendular(conn)
+
+        if not args.skip_informalidade:
+            carregar_informalidade(conn)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)
