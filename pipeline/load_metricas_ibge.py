@@ -774,6 +774,207 @@ def carregar_quilombola(conn):
     upsert_metricas([(cod, "pct_quilombola", 2022, v) for cod, v in result.items()], conn)
 
 
+# ─── Censo 2022 — Migração e Escolarização ───────────────────────────────────
+
+def carregar_migracao(conn):
+    """
+    T10160 V13435 — Pessoas de 5+ anos que não residiam no município 5 anos antes.
+    Classificação: C2[6794]=Total, C58[95253]=Total.
+    Métrica: taxa_migracao = (imigrantes / populacao_2022) × 100.
+    Censo 2022 — 5570 municípios.
+    """
+    print("\n=== T10160: Taxa de migração inter-municipal (Censo 2022) ===")
+    url = (
+        f"{SIDRA_BASE}/10160/periodos/2022/variaveis/13435"
+        f"?localidades=N6[all]&classificacao=2[6794]|58[95253]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10160 falhou")
+        return
+
+    imigrantes: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        imigrantes[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    rows = []
+    for cod, imig in imigrantes.items():
+        pop = pop_map.get(cod)
+        if pop and pop > 0:
+            rows.append((cod, "taxa_migracao", 2022, imig / pop * 100))
+
+    print(f"    {len(rows)} municípios")
+    upsert_metricas(rows, conn)
+
+
+def carregar_escolarizacao_1517(conn):
+    """
+    T10140 V12805 — Taxa de escolarização das pessoas de 15 a 17 anos de idade.
+    Classificação: C86[95251]=Total raça/cor, C58[2792]=15 a 17 anos.
+    Censo 2022 — 5570 municípios.
+    """
+    print("\n=== T10140: Taxa de escolarização 15-17 anos (Censo 2022) ===")
+    url = (
+        f"{SIDRA_BASE}/10140/periodos/2022/variaveis/12805"
+        f"?localidades=N6[all]&classificacao=86[95251]|58[2792]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T10140 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "taxa_escolarizacao_1517", 2022, v) for cod, v in result.items()], conn)
+
+
+# ─── Censo Agropecuário 2017 — Mecanização e Crédito ─────────────────────────
+
+def carregar_agro_mecanizacao_financiamento(conn):
+    """
+    Censo Agropecuário 2017:
+      T6870 V1918 — Estab. com tratores (mecanização)
+      T6895 V1990 — Estab. com financiamento (acesso a crédito)
+    Denominador: total de estab. da T6773 V183 C829[46302].
+    Métricas: pct_mecanizado, pct_financiamento (%).
+    """
+    print("\n=== T6870/T6895: Mecanização e Financiamento (Censo Agro 2017) ===")
+
+    classif_total      = "829[46302]|12605[113521]"   # tipologia Total + potência Total
+    classif_agro_total = "829[46302]|12559[41148]"     # tipologia Total + condição legal Total
+
+    def fetch_n6all(tabela: int, variavel: int, classif: str) -> dict[int, float]:
+        url = (
+            f"{SIDRA_BASE}/{tabela}/periodos/2017/variaveis/{variavel}"
+            f"?localidades=N6[all]&classificacao={classif}"
+        )
+        print(f"  GET T{tabela} V{variavel} ...")
+        for t in range(3):
+            try:
+                r = requests.get(url, timeout=120)
+                if r.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            return {}
+        result: dict[int, float] = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2017", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            result[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        print(f"    → {len(result)} municípios")
+        return result
+
+    def fetch_6895_batched(cods: list[int]) -> dict[int, float]:
+        """T6895 returns 500 for >10 municipalities — query in batches of 10."""
+        BATCH = 10
+        result: dict[int, float] = {}
+        batches = [cods[i:i+BATCH] for i in range(0, len(cods), BATCH)]
+        print(f"  GET T6895 V1990 (batches de {BATCH}, total {len(batches)}) ...")
+        for i, batch in enumerate(batches):
+            cod_str = ",".join(str(c) for c in batch)
+            url = f"{SIDRA_BASE}/6895/periodos/2017/variaveis/1990?localidades=N6[{cod_str}]"
+            for attempt in range(3):
+                try:
+                    r = requests.get(url, timeout=30)
+                    if r.status_code == 200:
+                        break
+                    time.sleep(2)
+                except requests.exceptions.Timeout:
+                    time.sleep(2)
+            else:
+                continue
+            try:
+                d = r.json()
+                if not isinstance(d, list):
+                    continue
+                for vb in d:
+                    for ri in vb.get("resultados", []):
+                        for s in ri.get("series", []):
+                            try:
+                                cod = int(s["localidade"]["id"])
+                                val = s["serie"].get("2017", "-")
+                                if val and val not in ("-", "...", "X", ""):
+                                    result[cod] = float(val)
+                            except (ValueError, KeyError):
+                                pass
+            except Exception:
+                pass
+            if (i + 1) % 100 == 0:
+                print(f"    {i+1}/{len(batches)} lotes ({len(result)} mun. coletados)")
+            time.sleep(0.3)  # be gentle with SIDRA
+        print(f"    → {len(result)} municípios")
+        return result
+
+    # Total establishments (denominator — same as in carregar_censo_agropecuario)
+    total_map    = fetch_n6all(6773, 183, classif_agro_total)
+    tratores_map = fetch_n6all(6870, 1918, classif_total)
+    # T6895 only supports up to 10 municipalities per request
+    all_cods = list(total_map.keys())
+    fin_map  = fetch_6895_batched(all_cods)
+
+    rows = []
+    for cod, total in total_map.items():
+        if total <= 0:
+            continue
+        if cod in tratores_map:
+            rows.append((cod, "pct_mecanizado", 2017, tratores_map[cod] / total * 100))
+        if cod in fin_map:
+            rows.append((cod, "pct_financiamento", 2017, fin_map[cod] / total * 100))
+
+    n_mec = sum(1 for _, m, _, _ in rows if m == "pct_mecanizado")
+    n_fin = sum(1 for _, m, _, _ in rows if m == "pct_financiamento")
+    print(f"  pct_mecanizado: {n_mec} mun. | pct_financiamento: {n_fin} mun.")
+    upsert_metricas(rows, conn)
+
+
 # ─── CEMPRE — Cadastro Central de Empresas ────────────────────────────────────
 
 def carregar_cempre(conn, anos: list[int]):
@@ -1114,6 +1315,12 @@ def main():
                         help="Pula os indicadores de raça/etnia (indígena, quilombola)")
     parser.add_argument("--skip-agropecuario", action="store_true",
                         help="Pula o Censo Agropecuário 2017 (% agricultura familiar)")
+    parser.add_argument("--skip-agro-extra", action="store_true",
+                        help="Pula mecanização e financiamento agropecuário (T6870/T6895)")
+    parser.add_argument("--skip-migracao", action="store_true",
+                        help="Pula a taxa de migração (T10160)")
+    parser.add_argument("--skip-escolarizacao", action="store_true",
+                        help="Pula a taxa de escolarização 15-17 anos (T10140)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1145,6 +1352,16 @@ def main():
         if not args.skip_agropecuario:
             print("\n──── Censo Agropecuário 2017 ────")
             carregar_censo_agropecuario(conn)
+
+        if not args.skip_agro_extra:
+            carregar_agro_mecanizacao_financiamento(conn)
+
+        if not args.skip_migracao:
+            print("\n──── Censo 2022 — Migração e Escolarização ────")
+            carregar_migracao(conn)
+
+        if not args.skip_escolarizacao:
+            carregar_escolarizacao_1517(conn)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)

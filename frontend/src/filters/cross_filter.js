@@ -70,8 +70,13 @@ export const ANOS_POR_METRICA_DEFAULT = {
   pct_quilombola:              [2022],
   // Censo Agropecuário 2017 (estático)
   pct_agrofamiliar:            [2017],
+  pct_mecanizado:              [2017],
+  pct_financiamento:           [2017],
   // CEMPRE — empresas por mil hab. (anual)
   empresas_por_1k:             [2023],
+  // Censo 2022 — Migração e Escolarização (estático)
+  taxa_migracao:               [2022],
+  taxa_escolarizacao_1517:     [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes

@@ -34,7 +34,11 @@ const METRICAS_LABELS = {
   pct_indigena:                "Pop. indígena (autodeclarada) (%)",
   pct_quilombola:              "Pop. quilombola (%)",
   pct_agrofamiliar:            "Agricultura familiar — % estabelecimentos",
+  pct_mecanizado:              "Estabelecimentos com tratores (%)",
+  pct_financiamento:           "Estabelecimentos com financiamento (%)",
   empresas_por_1k:             "Empresas e organizações (por 1k hab.)",
+  taxa_migracao:               "Imigração inter-municipal (%)",
+  taxa_escolarizacao_1517:     "Taxa de escolarização 15-17 anos (%)",
   renda_domiciliar_per_capita: "Renda domiciliar per capita — média (R$)",
   renda_domiciliar_mediana_pc: "Renda domiciliar per capita — mediana (R$)",
   renda_media_trabalho:        "Renda média do trabalho (R$)",
@@ -66,6 +70,8 @@ const METRICAS_PERCENT = new Set([
   "taxa_ocupacao",
   "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
   "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
+  "pct_mecanizado", "pct_financiamento",
+  "taxa_migracao", "taxa_escolarizacao_1517",
 ]);
 
 function formatarValor(v, metrica) {
@@ -100,7 +106,8 @@ const METRICAS_MELHOR_ALTO = new Set([
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   "renda_media_trabalho", "renda_mediana_trabalho",
   "taxa_ocupacao",
-  "pct_agrofamiliar", "empresas_por_1k",
+  "pct_agrofamiliar", "pct_mecanizado", "pct_financiamento",
+  "empresas_por_1k", "taxa_escolarizacao_1517",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

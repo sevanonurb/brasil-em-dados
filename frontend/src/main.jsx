@@ -262,6 +262,28 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0, max: 150 },
     MUNICIPAL: { min: 0, max: 300 },
   },
+  // Censo Agropecuário 2017 — mecanização e crédito
+  pct_mecanizado: {
+    NACIONAL:  { min: 0, max: 80  },
+    ESTADUAL:  { min: 0, max: 100 },
+    MUNICIPAL: { min: 0, max: 100 },
+  },
+  pct_financiamento: {
+    NACIONAL:  { min: 0, max: 30  },
+    ESTADUAL:  { min: 0, max: 60  },
+    MUNICIPAL: { min: 0, max: 80  },
+  },
+  // Censo 2022 — migração e escolarização
+  taxa_migracao: {
+    NACIONAL:  { min: 0, max: 15  },
+    ESTADUAL:  { min: 0, max: 30  },
+    MUNICIPAL: { min: 0, max: 60  },
+  },
+  taxa_escolarizacao_1517: {
+    NACIONAL:  { min: 50, max: 100 },
+    ESTADUAL:  { min: 40, max: 100 },
+    MUNICIPAL: { min: 40, max: 100 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -350,7 +372,11 @@ function makeTooltip(metrica, cid10) {
     pct_indigena:                "Pop. indígena",
     pct_quilombola:              "Pop. quilombola",
     pct_agrofamiliar:            "Agric. familiar",
+    pct_mecanizado:              "Com tratores",
+    pct_financiamento:           "Com financiamento",
     empresas_por_1k:             "Empresas / 1k hab.",
+    taxa_migracao:               "Imigração inter-mun.",
+    taxa_escolarizacao_1517:     "Escolarização 15-17",
   };
 
   const METRICAS_REAIS = new Set([
@@ -369,6 +395,8 @@ function makeTooltip(metrica, cid10) {
     "taxa_ocupacao",
     "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
     "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
+    "pct_mecanizado", "pct_financiamento",
+    "taxa_migracao", "taxa_escolarizacao_1517",
   ]);
 
   return ({ object }) => {

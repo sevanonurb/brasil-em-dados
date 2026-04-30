@@ -95,6 +95,7 @@ const GRUPOS_METRICAS = [
       { value: "ideb_anos_iniciais",          label: "IDEB — anos iniciais" },
       { value: "ideb_anos_finais",            label: "IDEB — anos finais" },
       { value: "taxa_alfabetizacao",          label: "Taxa de alfabetização 15+ (%)" },
+      { value: "taxa_escolarizacao_1517",     label: "Escolarização 15-17 anos (%)" },
     ],
   },
   {
@@ -125,6 +126,7 @@ const GRUPOS_METRICAS = [
       { value: "media_moradores",             label: "Média de moradores por domicílio" },
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
+      { value: "taxa_migracao",               label: "Imigração inter-municipal (%)" },
     ],
   },
   {
@@ -138,6 +140,8 @@ const GRUPOS_METRICAS = [
     label: "Agropecuário (Censo 2017)",
     opcoes: [
       { value: "pct_agrofamiliar",            label: "Agricultura familiar — % estabelecimentos" },
+      { value: "pct_mecanizado",              label: "Estabelecimentos com tratores (%)" },
+      { value: "pct_financiamento",           label: "Estabelecimentos com financiamento (%)" },
     ],
   },
 ];
