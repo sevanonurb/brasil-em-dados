@@ -81,6 +81,9 @@ export const ANOS_POR_METRICA_DEFAULT = {
   taxa_desemprego:             [2022],
   taxa_pendular:               [2022],
   taxa_informalidade:          [2022],
+  // Censo 2022 — Renda e Pobreza (estático)
+  pct_baixa_renda:             [2022],
+  pct_renda_trabalho:          [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes

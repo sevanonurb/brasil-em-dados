@@ -109,6 +109,13 @@ const GRUPOS_METRICAS = [
     ],
   },
   {
+    label: "Pobreza e Distribuição de Renda (Censo 2022)",
+    opcoes: [
+      { value: "pct_baixa_renda",              label: "Pop. com renda ≤ 1/2 SM per capita (%)" },
+      { value: "pct_renda_trabalho",           label: "Renda domiciliar do trabalho (%)" },
+    ],
+  },
+  {
     label: "Educação — Censo 2022 Amostra",
     opcoes: [
       { value: "media_anos_estudo",            label: "Média de anos de estudo (11+)" },

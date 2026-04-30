@@ -86,6 +86,9 @@ FALLBACK = {
     "taxa_desemprego":             [2022],
     "taxa_pendular":               [2022],
     "taxa_informalidade":          [2022],
+    # Censo 2022 — Renda e Pobreza (estático)
+    "pct_baixa_renda":             [2022],
+    "pct_renda_trabalho":          [2022],
 }
 
 
@@ -196,6 +199,9 @@ def query_anos():
         "taxa_desemprego":             [2022],
         "taxa_pendular":               [2022],
         "taxa_informalidade":          [2022],
+        # Censo 2022 — Renda e Pobreza (estático)
+        "pct_baixa_renda":             [2022],
+        "pct_renda_trabalho":          [2022],
     }
 
 

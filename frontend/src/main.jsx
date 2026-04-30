@@ -299,6 +299,16 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0, max: 70  },
     MUNICIPAL: { min: 0, max: 90  },
   },
+  pct_baixa_renda: {
+    NACIONAL:  { min: 0, max: 30  },
+    ESTADUAL:  { min: 0, max: 50  },
+    MUNICIPAL: { min: 0, max: 70  },
+  },
+  pct_renda_trabalho: {
+    NACIONAL:  { min: 20, max: 90 },
+    ESTADUAL:  { min: 15, max: 95 },
+    MUNICIPAL: { min: 10, max: 98 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -395,6 +405,8 @@ function makeTooltip(metrica, cid10) {
     taxa_desemprego:             "Desemprego",
     taxa_pendular:               "Pendularidade laboral",
     taxa_informalidade:          "Informalidade",
+    pct_baixa_renda:             "Baixa renda (≤1/2 SM)",
+    pct_renda_trabalho:          "% renda do trabalho",
   };
 
   const METRICAS_REAIS = new Set([
@@ -416,6 +428,7 @@ function makeTooltip(metrica, cid10) {
     "pct_mecanizado", "pct_financiamento",
     "taxa_migracao", "taxa_escolarizacao_1517",
     "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
+    "pct_baixa_renda", "pct_renda_trabalho",
   ]);
 
   return ({ object }) => {

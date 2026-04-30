@@ -1360,6 +1360,69 @@ def carregar_informalidade(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_baixa_renda(conn):
+    """
+    T10296 V1013604 — % moradores com renda domiciliar per capita até 1/2 SM (Censo 2022).
+    Soma de C386[9681] (até 1/4 SM) + C386[9682] (1/4 a 1/2 SM).
+    Proxy de pobreza moderada. Cobre 5553–5570 municípios.
+    """
+    print("\n=== T10296: Baixa renda — Censo 2022 ===")
+    params_base = "2[6794]|86[95251]"
+    acum: dict[int, float] = {}
+
+    for cat_id, label in [(9681, "≤1/4 SM"), (9682, "1/4-1/2 SM")]:
+        url = (
+            f"{SIDRA_BASE}/10296/periodos/2022/variaveis/1013604"
+            f"?localidades=N6[all]&classificacao={params_base}|386[{cat_id}]"
+        )
+        r = requests.get(url, timeout=120)
+        count = 0
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            acum[cod] = acum.get(cod, 0.0) + float(val)
+                            count += 1
+                    except (ValueError, KeyError):
+                        pass
+        print(f"  C386[{cat_id}] ({label}): {count} mun.")
+
+    rows = [(cod, "pct_baixa_renda", 2022, v) for cod, v in acum.items()]
+    print(f"  pct_baixa_renda: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_renda_trabalho(conn):
+    """
+    T10297 V13504 — % do rendimento domiciliar proveniente de trabalho (Censo 2022).
+    C11308[79451] = Rendimento de todos os trabalhos (% do total).
+    Alta proporção = dependência de trabalho; baixa = transferências/previdência.
+    Cobre 5570 municípios.
+    """
+    print("\n=== T10297: % renda do trabalho — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/10297/periodos/2022/variaveis/13504"
+        f"?localidades=N6[all]&classificacao=11308[79451]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "pct_renda_trabalho", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  pct_renda_trabalho: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1437,6 +1500,10 @@ def main():
                         help="Pula a taxa de pendularidade (T10329)")
     parser.add_argument("--skip-informalidade", action="store_true",
                         help="Pula a taxa de informalidade (T10261)")
+    parser.add_argument("--skip-baixa-renda", action="store_true",
+                        help="Pula % baixa renda (T10296)")
+    parser.add_argument("--skip-renda-trabalho", action="store_true",
+                        help="Pula % renda do trabalho (T10297)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1488,6 +1555,13 @@ def main():
 
         if not args.skip_informalidade:
             carregar_informalidade(conn)
+
+        if not args.skip_baixa_renda:
+            print("\n──── Censo 2022 — Renda e Pobreza ────")
+            carregar_baixa_renda(conn)
+
+        if not args.skip_renda_trabalho:
+            carregar_renda_trabalho(conn)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)
