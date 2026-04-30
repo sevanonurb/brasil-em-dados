@@ -239,6 +239,29 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 20, max: 95 },
     MUNICIPAL: { min: 10, max: 98 },
   },
+  // Raça/Etnia (Censo 2022)
+  pct_indigena: {
+    NACIONAL:  { min: 0, max: 10  },
+    ESTADUAL:  { min: 0, max: 30  },
+    MUNICIPAL: { min: 0, max: 95  },
+  },
+  pct_quilombola: {
+    NACIONAL:  { min: 0, max: 5   },
+    ESTADUAL:  { min: 0, max: 20  },
+    MUNICIPAL: { min: 0, max: 85  },
+  },
+  // Censo Agropecuário 2017 — agricultura familiar
+  pct_agrofamiliar: {
+    NACIONAL:  { min: 0, max: 100 },
+    ESTADUAL:  { min: 0, max: 100 },
+    MUNICIPAL: { min: 0, max: 100 },
+  },
+  // CEMPRE — empresas por mil hab.
+  empresas_por_1k: {
+    NACIONAL:  { min: 0, max: 80  },
+    ESTADUAL:  { min: 0, max: 150 },
+    MUNICIPAL: { min: 0, max: 300 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -324,6 +347,10 @@ function makeTooltip(metrica, cid10) {
     vbp_pecuaria_per_capita:     "VBP pecuário per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
+    pct_indigena:                "Pop. indígena",
+    pct_quilombola:              "Pop. quilombola",
+    pct_agrofamiliar:            "Agric. familiar",
+    empresas_por_1k:             "Empresas / 1k hab.",
   };
 
   const METRICAS_REAIS = new Set([
@@ -341,6 +368,7 @@ function makeTooltip(metrica, cid10) {
     "pct_superior_completo", "taxa_deficiencia",
     "taxa_ocupacao",
     "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
+    "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
   ]);
 
   return ({ object }) => {

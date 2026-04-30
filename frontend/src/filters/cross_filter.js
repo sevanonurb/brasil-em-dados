@@ -65,6 +65,13 @@ export const ANOS_POR_METRICA_DEFAULT = {
   // Fiscal — Siconfi RGF
   divida_rcl:                  [2022],
   despesa_pessoal_rcl:         [2022],
+  // Censo 2022 — Raça/Etnia (estático)
+  pct_indigena:                [2022],
+  pct_quilombola:              [2022],
+  // Censo Agropecuário 2017 (estático)
+  pct_agrofamiliar:            [2017],
+  // CEMPRE — empresas por mil hab. (anual)
+  empresas_por_1k:             [2023],
 };
 
 // Re-exporta para compatibilidade com imports existentes

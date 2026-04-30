@@ -26,9 +26,20 @@ Indicadores carregados:
   PAM — Produção Agrícola Municipal (anual):
     vbp_agricola_per_capita — VBP agrícola per capita em R$ (T5457+T1612 V215)
 
+  Censo 2022 — Raça/Etnia:
+    pct_indigena   — % declarou-se indígena na raça/cor (T9606 V1000093)
+    pct_quilombola — % da população quilombola (T9578 V4728)
+
+  Censo Agropecuário 2017:
+    pct_agrofamiliar — % de estabelecimentos de agricultura familiar (T6773 V183)
+
+  CEMPRE — Cadastro Central de Empresas (anual):
+    empresas_por_1k — empresas e organizações por 1k hab. (T9582 V2585)
+
 Uso:
     python load_metricas_ibge.py               # todos os indicadores
-    python load_metricas_ibge.py --skip-censo  # só PAM
+    python load_metricas_ibge.py --skip-censo  # só PAM e demais anuais
+    python load_metricas_ibge.py --skip-raca --skip-agropecuario  # pula novos
     python load_metricas_ibge.py --anos-pam 2020 2021 2022
 """
 
@@ -681,6 +692,200 @@ def carregar_internet(conn):
     upsert_metricas(rows, conn)
 
 
+# ─── Censo 2022 — População por raça/localização ─────────────────────────────
+
+def carregar_indigena(conn):
+    """
+    T9606 V1000093 — % da população residente que se declarou indígena (raça/cor).
+    Classificação: C86[2780]=Indígena, C2[6794]=Total, C287[100362]=Total.
+    Censo 2022 — ~4825 municípios com dado.
+    """
+    print("\n=== T9606: % população indígena (raça/cor) ===")
+    url = (
+        f"{SIDRA_BASE}/9606/periodos/2022/variaveis/1000093"
+        f"?localidades=N6[all]&classificacao=86[2780]|2[6794]|287[100362]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T9606 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "pct_indigena", 2022, v) for cod, v in result.items()], conn)
+
+
+def carregar_quilombola(conn):
+    """
+    T9578 V4728 — % de pessoas quilombolas no total da população residente.
+    Classificação: C2661[32776]=Total.
+    Censo 2022 — ~1700 municípios com comunidades quilombolas.
+    """
+    print("\n=== T9578: % população quilombola ===")
+    url = (
+        f"{SIDRA_BASE}/9578/periodos/2022/variaveis/4728"
+        f"?localidades=N6[all]&classificacao=2661[32776]"
+    )
+    print(f"  GET {url[:100]}...")
+    for tentativa in range(3):
+        try:
+            r = requests.get(url, timeout=120)
+            if r.status_code == 200:
+                break
+            time.sleep(10)
+        except requests.exceptions.Timeout:
+            time.sleep(10)
+    else:
+        print("  ERRO: T9578 falhou")
+        return
+
+    result: dict[int, float] = {}
+    for var_block in r.json():
+        for res_item in var_block.get("resultados", []):
+            for serie in res_item.get("series", []):
+                try:
+                    cod = int(serie["localidade"]["id"])
+                    val_str = serie["serie"].get("2022", "-")
+                    if val_str and val_str not in ("-", "...", "X", ""):
+                        result[cod] = float(val_str)
+                except (ValueError, KeyError):
+                    pass
+
+    print(f"    {len(result)} municípios")
+    upsert_metricas([(cod, "pct_quilombola", 2022, v) for cod, v in result.items()], conn)
+
+
+# ─── CEMPRE — Cadastro Central de Empresas ────────────────────────────────────
+
+def carregar_cempre(conn, anos: list[int]):
+    """
+    T9582 V2585 — Número de empresas e organizações por município.
+    Classificação: C12762[0]=Total CNAE, C319[0]=Total pessoal, C12386[0]=Total ano.
+    Disponível anualmente (2022-2023+). Cobertura total: 5570 municípios.
+    Métrica: empresas_por_1k = (empresas / pop_2022) * 1000
+    """
+    print("\n=== T9582: Empresas por 1k habitantes (CEMPRE) ===")
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    for ano in anos:
+        url = (
+            f"{SIDRA_BASE}/9582/periodos/{ano}/variaveis/2585"
+            f"?localidades=N6[all]&classificacao=12762[0]|319[0]|12386[0]"
+        )
+        print(f"  GET T9582 V2585 {ano} ...")
+        for tentativa in range(3):
+            try:
+                r = requests.get(url, timeout=120)
+                if r.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            print(f"  ERRO: T9582 {ano} falhou")
+            continue
+
+        rows = []
+        for var_block in r.json():
+            for res_item in var_block.get("resultados", []):
+                for serie in res_item.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val_str = serie["serie"].get(str(ano), "-")
+                        if val_str and val_str not in ("-", "...", "X", ""):
+                            empresas = float(val_str)
+                            pop = pop_map.get(cod)
+                            if pop and pop > 0:
+                                rows.append((cod, "empresas_por_1k", ano, empresas / pop * 1000))
+                    except (ValueError, KeyError):
+                        pass
+
+        print(f"    {ano}: {len(rows)} municípios")
+        upsert_metricas(rows, conn)
+
+
+# ─── Censo Agropecuário 2017 ──────────────────────────────────────────────────
+
+def carregar_censo_agropecuario(conn):
+    """
+    T6773 V183 — Número de estabelecimentos agropecuários (Censo Agropecuário 2017).
+    Dois fetches:
+      C829[46302] = Total → denominador para % agricultura familiar
+      C829[46304] = Agricultura familiar - sim → numerador
+    Métrica: pct_agrofamiliar = (familiar / total) * 100
+    Cobertura: ~5570 municípios.
+    """
+    print("\n=== T6773: % Agricultura Familiar (Censo Agropecuário 2017) ===")
+
+    classif_base = "12559[41148]|12553[46523]|834[46527]|835[46528]|12598[41141]"
+
+    def fetch_t6773(categoria_tipologia: int) -> dict[int, float]:
+        url = (
+            f"{SIDRA_BASE}/6773/periodos/2017/variaveis/183"
+            f"?localidades=N6[all]&classificacao=829[{categoria_tipologia}]|{classif_base}"
+        )
+        print(f"  GET T6773 V183 C829[{categoria_tipologia}] ...")
+        for tentativa in range(3):
+            try:
+                r = requests.get(url, timeout=120)
+                if r.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            print(f"  ERRO: T6773 C829[{categoria_tipologia}] falhou")
+            return {}
+        result: dict[int, float] = {}
+        for var_block in r.json():
+            for res_item in var_block.get("resultados", []):
+                for serie in res_item.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val_str = serie["serie"].get("2017", "-")
+                        if val_str and val_str not in ("-", "...", "X", ""):
+                            result[cod] = float(val_str)
+                    except (ValueError, KeyError):
+                        pass
+        print(f"    → {len(result)} municípios")
+        return result
+
+    total_map = fetch_t6773(46302)    # Total estabelecimentos
+    familiar_map = fetch_t6773(46304) # Agricultura familiar - sim
+
+    rows = []
+    for cod, total in total_map.items():
+        if total <= 0:
+            continue
+        familiar = familiar_map.get(cod, 0.0)
+        rows.append((cod, "pct_agrofamiliar", 2017, familiar / total * 100))
+
+    print(f"  % calculado para {len(rows)} municípios")
+    upsert_metricas(rows, conn)
+
+
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
 def carregar_mortalidade_infantil(conn, anos: list[int]):
@@ -883,13 +1088,13 @@ def main():
     parser.add_argument("--skip-pam", action="store_true",
                         help="Pula a PAM (Produção Agrícola Municipal)")
     parser.add_argument("--anos-pam", nargs="+", type=int,
-                        default=[2019, 2020, 2021, 2022],
-                        help="Anos para baixar dados da PAM (padrão: 2019-2022)")
+                        default=[2019, 2020, 2021, 2022, 2023],
+                        help="Anos para baixar dados da PAM (padrão: 2019-2023)")
     parser.add_argument("--skip-pib-setor", action="store_true",
                         help="Pula as participações setoriais do PIB (T5938)")
     parser.add_argument("--anos-pib-setor", nargs="+", type=int,
-                        default=[2019, 2020, 2021],
-                        help="Anos para PIB setorial (padrão: 2019-2021)")
+                        default=[2018, 2019, 2020, 2021],
+                        help="Anos para PIB setorial (padrão: 2018-2021)")
     parser.add_argument("--skip-pecuaria", action="store_true",
                         help="Pula a Pecuária Municipal (T74)")
     parser.add_argument("--anos-pecuaria", nargs="+", type=int,
@@ -900,6 +1105,15 @@ def main():
     parser.add_argument("--anos-infantil", nargs="+", type=int,
                         default=[2019, 2020, 2021, 2022, 2023],
                         help="Anos para mortalidade infantil (padrão: 2019-2023)")
+    parser.add_argument("--skip-cempre", action="store_true",
+                        help="Pula o CEMPRE (empresas por mil hab., T9582)")
+    parser.add_argument("--anos-cempre", nargs="+", type=int,
+                        default=[2022, 2023],
+                        help="Anos para CEMPRE (padrão: 2022-2023)")
+    parser.add_argument("--skip-raca", action="store_true",
+                        help="Pula os indicadores de raça/etnia (indígena, quilombola)")
+    parser.add_argument("--skip-agropecuario", action="store_true",
+                        help="Pula o Censo Agropecuário 2017 (% agricultura familiar)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -922,6 +1136,18 @@ def main():
             carregar_renda_trabalho(conn)
             carregar_deficiencia(conn)
             carregar_superior_completo(conn)
+
+        if not args.skip_raca:
+            print("\n──── Censo 2022 — Raça/Etnia ────")
+            carregar_indigena(conn)
+            carregar_quilombola(conn)
+
+        if not args.skip_agropecuario:
+            print("\n──── Censo Agropecuário 2017 ────")
+            carregar_censo_agropecuario(conn)
+
+        if not args.skip_cempre:
+            carregar_cempre(conn, args.anos_cempre)
 
         if not args.skip_infantil:
             carregar_mortalidade_infantil(conn, args.anos_infantil)

@@ -70,6 +70,13 @@ FALLBACK = {
     # Fiscal — Siconfi RGF (anual)
     "divida_rcl":                  [2022],
     "despesa_pessoal_rcl":         [2022],
+    # Censo 2022 — Raça/Etnia (estático)
+    "pct_indigena":                [2022],
+    "pct_quilombola":              [2022],
+    # Censo Agropecuário 2017 (estático)
+    "pct_agrofamiliar":            [2017],
+    # CEMPRE — empresas por mil hab. (anual)
+    "empresas_por_1k":             [2023],
 }
 
 
@@ -164,6 +171,13 @@ def query_anos():
         # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)
         "divida_rcl":                  anos_metricas.get("divida_rcl", [2022]),
         "despesa_pessoal_rcl":         anos_metricas.get("despesa_pessoal_rcl", [2022]),
+        # Censo 2022 — Raça/Etnia (estático)
+        "pct_indigena":                [2022],
+        "pct_quilombola":              [2022],
+        # Censo Agropecuário 2017 (estático)
+        "pct_agrofamiliar":            [2017],
+        # CEMPRE — Cadastro Central de Empresas (anual)
+        "empresas_por_1k":             anos_metricas.get("empresas_por_1k", [2023]),
     }
 
 

@@ -63,6 +63,7 @@ const GRUPOS_METRICAS = [
       { value: "despesa_educacao_per_capita", label: "Gasto em educação per capita" },
       { value: "vbp_agricola_per_capita",     label: "VBP agrícola per capita" },
       { value: "vbp_pecuaria_per_capita",     label: "VBP pecuário per capita" },
+      { value: "empresas_por_1k",             label: "Empresas e organizações (por 1k hab.)" },
     ],
   },
   {
@@ -124,6 +125,19 @@ const GRUPOS_METRICAS = [
       { value: "media_moradores",             label: "Média de moradores por domicílio" },
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
+    ],
+  },
+  {
+    label: "Raça e Etnia (Censo 2022)",
+    opcoes: [
+      { value: "pct_indigena",                label: "Pop. indígena (autodeclarada) (%)" },
+      { value: "pct_quilombola",              label: "Pop. quilombola (%)" },
+    ],
+  },
+  {
+    label: "Agropecuário (Censo 2017)",
+    opcoes: [
+      { value: "pct_agrofamiliar",            label: "Agricultura familiar — % estabelecimentos" },
     ],
   },
 ];

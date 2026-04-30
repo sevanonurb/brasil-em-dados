@@ -31,6 +31,10 @@ const METRICAS_LABELS = {
   vbp_agricola_per_capita:     "VBP agrícola per capita (R$)",
   divida_rcl:                  "Dívida consolidada / RCL (%)",
   despesa_pessoal_rcl:         "Despesa pessoal / RCL (%)",
+  pct_indigena:                "Pop. indígena (autodeclarada) (%)",
+  pct_quilombola:              "Pop. quilombola (%)",
+  pct_agrofamiliar:            "Agricultura familiar — % estabelecimentos",
+  empresas_por_1k:             "Empresas e organizações (por 1k hab.)",
   renda_domiciliar_per_capita: "Renda domiciliar per capita — média (R$)",
   renda_domiciliar_mediana_pc: "Renda domiciliar per capita — mediana (R$)",
   renda_media_trabalho:        "Renda média do trabalho (R$)",
@@ -61,6 +65,7 @@ const METRICAS_PERCENT = new Set([
   "pct_superior_completo", "taxa_deficiencia",
   "taxa_ocupacao",
   "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
+  "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
 ]);
 
 function formatarValor(v, metrica) {
@@ -95,6 +100,7 @@ const METRICAS_MELHOR_ALTO = new Set([
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   "renda_media_trabalho", "renda_mediana_trabalho",
   "taxa_ocupacao",
+  "pct_agrofamiliar", "empresas_por_1k",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {
