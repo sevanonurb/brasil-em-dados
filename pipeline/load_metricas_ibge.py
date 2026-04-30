@@ -683,6 +683,30 @@ def carregar_internet(conn):
 
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
+def carregar_pecuaria(conn, anos: list[int]):
+    """
+    T74 — Valor da produção da pecuária municipal (Mil R$) per capita.
+    V215 = Valor da produção. Disponível anualmente (2020-2024+).
+    """
+    print("\n=== T74: Pecuária — Valor da Produção per capita ===")
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    for ano in anos:
+        dados = sidra_fetch(74, 215, periodo=str(ano))
+        if not dados:
+            continue
+        rows = []
+        for cod, vbp_milhares in dados.items():
+            pop = pop_map.get(cod)
+            if pop and pop > 0:
+                rows.append((cod, "vbp_pecuaria_per_capita", ano, (vbp_milhares * 1000) / pop))
+        print(f"    {ano}: per capita para {len(rows)} municípios")
+        upsert_metricas(rows, conn)
+
+
 def carregar_setor_pib(conn, anos: list[int]):
     """
     T5938 — Participação setorial no PIB municipal (%).
@@ -779,6 +803,11 @@ def main():
     parser.add_argument("--anos-pib-setor", nargs="+", type=int,
                         default=[2019, 2020, 2021],
                         help="Anos para PIB setorial (padrão: 2019-2021)")
+    parser.add_argument("--skip-pecuaria", action="store_true",
+                        help="Pula a Pecuária Municipal (T74)")
+    parser.add_argument("--anos-pecuaria", nargs="+", type=int,
+                        default=[2020, 2021, 2022, 2023],
+                        help="Anos para pecuária (padrão: 2020-2023)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -801,6 +830,9 @@ def main():
             carregar_renda_trabalho(conn)
             carregar_deficiencia(conn)
             carregar_superior_completo(conn)
+
+        if not args.skip_pecuaria:
+            carregar_pecuaria(conn, args.anos_pecuaria)
 
         if not args.skip_pib_setor:
             carregar_setor_pib(conn, args.anos_pib_setor)

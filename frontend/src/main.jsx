@@ -154,6 +154,11 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0, max: 40000  },
     MUNICIPAL: { min: 0, max: 100000 },
   },
+  vbp_pecuaria_per_capita: {
+    NACIONAL:  { min: 0, max: 3000  },
+    ESTADUAL:  { min: 0, max: 10000 },
+    MUNICIPAL: { min: 0, max: 30000 },
+  },
   // Fiscal — Dívida Consolidada / RCL (%) — limite LRF = 120%
   divida_rcl: {
     NACIONAL:  { min: 0, max: 100 },
@@ -310,6 +315,7 @@ function makeTooltip(metrica, cid10) {
     pct_pib_industria:           "Indústria / PIB",
     pct_pib_servicos:            "Serviços / PIB",
     vbp_agricola_per_capita:     "VBP agrícola per capita",
+    vbp_pecuaria_per_capita:     "VBP pecuário per capita",
     divida_rcl:                  "Dívida / RCL",
     despesa_pessoal_rcl:         "Pessoal / RCL",
   };
@@ -317,7 +323,7 @@ function makeTooltip(metrica, cid10) {
   const METRICAS_REAIS = new Set([
     "pib_per_capita", "receita_per_capita",
     "despesa_saude_per_capita", "despesa_educacao_per_capita",
-    "vbp_agricola_per_capita",
+    "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
     "renda_media_trabalho", "renda_mediana_trabalho",
     "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   ]);

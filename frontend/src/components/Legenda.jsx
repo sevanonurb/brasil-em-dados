@@ -42,12 +42,13 @@ const METRICAS_LABELS = {
   pct_pib_agropecuaria:        "Agropecuária — % do PIB municipal",
   pct_pib_industria:           "Indústria — % do PIB municipal",
   pct_pib_servicos:            "Serviços — % do PIB municipal",
+  vbp_pecuaria_per_capita:     "VBP pecuário per capita (R$)",
 };
 
 const METRICAS_REAIS = new Set([
   "pib_per_capita", "receita_per_capita",
   "despesa_saude_per_capita", "despesa_educacao_per_capita",
-  "vbp_agricola_per_capita",
+  "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
   "renda_media_trabalho", "renda_mediana_trabalho",
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
 ]);
@@ -88,7 +89,7 @@ const METRICAS_MELHOR_ALTO = new Set([
   "taxa_natalidade", "leitos_sus_por_1k", "medicos_por_10k",
   "ideb_anos_iniciais", "ideb_anos_finais",
   "taxa_alfabetizacao", "domicilios_internet",
-  "vbp_agricola_per_capita",
+  "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
   "media_anos_estudo", "pct_superior_completo",
   "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
   "renda_media_trabalho", "renda_mediana_trabalho",

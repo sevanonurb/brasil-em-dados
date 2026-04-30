@@ -61,6 +61,7 @@ const GRUPOS_METRICAS = [
       { value: "despesa_saude_per_capita",    label: "Gasto em saúde per capita" },
       { value: "despesa_educacao_per_capita", label: "Gasto em educação per capita" },
       { value: "vbp_agricola_per_capita",     label: "VBP agrícola per capita" },
+      { value: "vbp_pecuaria_per_capita",     label: "VBP pecuário per capita" },
     ],
   },
   {

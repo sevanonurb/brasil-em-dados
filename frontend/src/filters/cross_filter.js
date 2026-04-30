@@ -57,7 +57,9 @@ export const ANOS_POR_METRICA_DEFAULT = {
   pct_pib_industria:           [2021],
   pct_pib_servicos:            [2021],
   // PAM — Produção Agrícola Municipal
-  vbp_agricola_per_capita:     [2022],
+  vbp_agricola_per_capita:     [2023],
+  // Pecuária Municipal (T74)
+  vbp_pecuaria_per_capita:     [2023],
   // Fiscal — Siconfi RGF
   divida_rcl:                  [2022],
   despesa_pessoal_rcl:         [2022],

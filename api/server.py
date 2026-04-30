@@ -62,7 +62,9 @@ FALLBACK = {
     "pct_pib_industria":           [2021],
     "pct_pib_servicos":            [2021],
     # Produção Agrícola Municipal (PAM — anual)
-    "vbp_agricola_per_capita":     [2022],
+    "vbp_agricola_per_capita":     [2023],
+    # Pecuária Municipal (T74 — anual)
+    "vbp_pecuaria_per_capita":     [2023],
     # Fiscal — Siconfi RGF (anual)
     "divida_rcl":                  [2022],
     "despesa_pessoal_rcl":         [2022],
@@ -152,7 +154,9 @@ def query_anos():
         "pct_pib_industria":           anos_metricas.get("pct_pib_industria", [2021]),
         "pct_pib_servicos":            anos_metricas.get("pct_pib_servicos", [2021]),
         # Produção Agrícola Municipal (PAM — anual, carregado via load_metricas_ibge.py)
-        "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2022]),
+        "vbp_agricola_per_capita":     anos_metricas.get("vbp_agricola_per_capita", [2023]),
+        # Pecuária Municipal (T74 — anual)
+        "vbp_pecuaria_per_capita":     anos_metricas.get("vbp_pecuaria_per_capita", [2023]),
         # Fiscal — Siconfi RGF (anual, carregado via load_metricas_rgf.py)
         "divida_rcl":                  anos_metricas.get("divida_rcl", [2022]),
         "despesa_pessoal_rcl":         anos_metricas.get("despesa_pessoal_rcl", [2022]),
