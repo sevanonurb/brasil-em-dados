@@ -89,6 +89,7 @@ export const ANOS_POR_METRICA_DEFAULT = {
   domicilios_maquina_lavar:    [2022],
   superlotacao_domiciliar:     [2022],
   domicilios_alugados:         [2022],
+  domicilios_monoparentais:    [2022],
   // Censo 2022 — Fecundidade (estático)
   media_filhos_mulher:         [2022],
 };

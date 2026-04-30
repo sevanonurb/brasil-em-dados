@@ -130,6 +130,7 @@ const GRUPOS_METRICAS = [
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "domicilios_maquina_lavar",    label: "Domicílios com máquina de lavar (%)" },
       { value: "domicilios_alugados",         label: "Domicílios alugados (%)" },
+      { value: "domicilios_monoparentais",    label: "Domicílios monoparentais — sem cônjuge com filhos (%)" },
       { value: "superlotacao_domiciliar",     label: "Superlotação — >3 moradores/quarto (%)" },
       { value: "pct_chefia_feminina",         label: "Domicílios com responsável mulher (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },

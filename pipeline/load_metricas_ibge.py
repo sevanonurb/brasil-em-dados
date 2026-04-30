@@ -1462,6 +1462,33 @@ def carregar_media_filhos(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_monoparental(conn):
+    """
+    T9882 V1000800 — % domicílios monoparentais: responsável sem cônjuge com filhos (Censo 2022).
+    C1887[72607] = responsável sem cônjuge com filho(s)/enteado(s), C11561[100679]=Total sexo.
+    Indica vulnerabilidade familiar. 5570 municípios. Média ~14.5%.
+    """
+    print("\n=== T9882: % domicílios monoparentais — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/9882/periodos/2022/variaveis/1000800"
+        f"?localidades=N6[all]&classificacao=1887[72607]|11561[100679]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "domicilios_monoparentais", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  domicilios_monoparentais: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_domicilios_alugados(conn):
     """
     T9929 V1000381 — % domicílios alugados (Censo 2022).
@@ -1654,6 +1681,8 @@ def main():
                         help="Pula % renda do trabalho (T10297)")
     parser.add_argument("--skip-media-filhos", action="store_true",
                         help="Pula média de filhos por mulher (T10078)")
+    parser.add_argument("--skip-monoparental", action="store_true",
+                        help="Pula % domicílios monoparentais (T9882)")
     parser.add_argument("--skip-alugados", action="store_true",
                         help="Pula % domicílios alugados (T9929)")
     parser.add_argument("--skip-chefia-feminina", action="store_true",
@@ -1724,6 +1753,10 @@ def main():
         if not args.skip_media_filhos:
             print("\n──── Censo 2022 — Fecundidade ────")
             carregar_media_filhos(conn)
+
+        if not args.skip_monoparental:
+            print("\n──── Censo 2022 — Estrutura Familiar ────")
+            carregar_monoparental(conn)
 
         if not args.skip_alugados:
             print("\n──── Censo 2022 — Condição de Ocupação ────")

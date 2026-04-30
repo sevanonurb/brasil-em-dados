@@ -334,6 +334,11 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0.5, max: 3.5 },
     MUNICIPAL: { min: 0.5, max: 3.5 },
   },
+  domicilios_monoparentais: {
+    NACIONAL:  { min: 5,  max: 25  },
+    ESTADUAL:  { min: 5,  max: 28  },
+    MUNICIPAL: { min: 4,  max: 28  },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -436,6 +441,7 @@ function makeTooltip(metrica, cid10) {
     domicilios_maquina_lavar:    "Máquina de lavar",
     superlotacao_domiciliar:     "Superlotação domiciliar",
     domicilios_alugados:         "Domicílios alugados",
+    domicilios_monoparentais:    "Domicílios monoparentais",
     media_filhos_mulher:         "Média filhos/mulher",
   };
 
@@ -460,7 +466,7 @@ function makeTooltip(metrica, cid10) {
     "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
     "pct_baixa_renda", "pct_renda_trabalho",
     "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
-    "domicilios_alugados",
+    "domicilios_alugados", "domicilios_monoparentais",
   ]);
 
   return ({ object }) => {
