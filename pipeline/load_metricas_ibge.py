@@ -1423,6 +1423,88 @@ def carregar_renda_trabalho(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_chefia_feminina(conn):
+    """
+    T9879 V1000800 — % domicílios com pessoa responsável mulher (Censo 2022).
+    C460[45902]=Total espécie, C68[9902]=Total moradores,
+    C11561[100681]=Mulheres, C12237[104570]=Total raça, C11562[72593]=Total idade.
+    Cobre 5570 municípios. Média ~44.9%.
+    """
+    print("\n=== T9879: % chefia feminina — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/9879/periodos/2022/variaveis/1000800"
+        f"?localidades=N6[all]&classificacao=460[45902]|68[9902]|11561[100681]|12237[104570]|11562[72593]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "pct_chefia_feminina", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  pct_chefia_feminina: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_domicilios_maquina(conn):
+    """
+    T9935 V1000381 — % domicílios com máquina de lavar roupa (Censo 2022).
+    C1977[73092]=Sim, C63[95826]=Total condição, C125[2932]=Total tipo.
+    Proxy de capacidade de consumo / nível de renda. Cobre 5570 municípios. Média ~53.8%.
+    """
+    print("\n=== T9935: % domicílios com máquina de lavar — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/9935/periodos/2022/variaveis/1000381"
+        f"?localidades=N6[all]&classificacao=1977[73092]|63[95826]|125[2932]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "domicilios_maquina_lavar", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  domicilios_maquina_lavar: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_superlotacao(conn):
+    """
+    T9933 V1000381 — % domicílios com >3 moradores por dormitório (Censo 2022).
+    C1975[73090]=Mais de 3 moradores, C63[95826]=Total, C125[2932]=Total tipo.
+    Indicador de precariedade habitacional. Cobre ~5484 municípios. Média ~2.3%.
+    """
+    print("\n=== T9933: % superlotação domiciliar — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/9933/periodos/2022/variaveis/1000381"
+        f"?localidades=N6[all]&classificacao=1975[73090]|63[95826]|125[2932]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", ""):
+                        rows.append((cod, "superlotacao_domiciliar", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  superlotacao_domiciliar: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1504,6 +1586,12 @@ def main():
                         help="Pula % baixa renda (T10296)")
     parser.add_argument("--skip-renda-trabalho", action="store_true",
                         help="Pula % renda do trabalho (T10297)")
+    parser.add_argument("--skip-chefia-feminina", action="store_true",
+                        help="Pula % chefia feminina (T9879)")
+    parser.add_argument("--skip-maquina-lavar", action="store_true",
+                        help="Pula % domicílios com máquina de lavar (T9935)")
+    parser.add_argument("--skip-superlotacao", action="store_true",
+                        help="Pula % superlotação domiciliar (T9933)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1562,6 +1650,16 @@ def main():
 
         if not args.skip_renda_trabalho:
             carregar_renda_trabalho(conn)
+
+        if not args.skip_chefia_feminina:
+            print("\n──── Censo 2022 — Domicílios ────")
+            carregar_chefia_feminina(conn)
+
+        if not args.skip_maquina_lavar:
+            carregar_domicilios_maquina(conn)
+
+        if not args.skip_superlotacao:
+            carregar_superlotacao(conn)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)

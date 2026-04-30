@@ -89,6 +89,10 @@ FALLBACK = {
     # Censo 2022 — Renda e Pobreza (estático)
     "pct_baixa_renda":             [2022],
     "pct_renda_trabalho":          [2022],
+    # Censo 2022 — Domicílios e Habitação (estático)
+    "pct_chefia_feminina":         [2022],
+    "domicilios_maquina_lavar":    [2022],
+    "superlotacao_domiciliar":     [2022],
 }
 
 
@@ -202,6 +206,10 @@ def query_anos():
         # Censo 2022 — Renda e Pobreza (estático)
         "pct_baixa_renda":             [2022],
         "pct_renda_trabalho":          [2022],
+        # Censo 2022 — Domicílios e Habitação (estático)
+        "pct_chefia_feminina":         [2022],
+        "domicilios_maquina_lavar":    [2022],
+        "superlotacao_domiciliar":     [2022],
     }
 
 

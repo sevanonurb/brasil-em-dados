@@ -124,15 +124,23 @@ const GRUPOS_METRICAS = [
     ],
   },
   {
+    label: "Domicílios e Habitação (Censo 2022)",
+    opcoes: [
+      { value: "media_moradores",             label: "Média de moradores por domicílio" },
+      { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
+      { value: "domicilios_maquina_lavar",    label: "Domicílios com máquina de lavar (%)" },
+      { value: "superlotacao_domiciliar",     label: "Superlotação — >3 moradores/quarto (%)" },
+      { value: "pct_chefia_feminina",         label: "Domicílios com responsável mulher (%)" },
+      { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
+    ],
+  },
+  {
     label: "Demográfico (Censo 2022)",
     opcoes: [
       { value: "densidade_pop",               label: "Densidade demográfica (hab/km²)" },
       { value: "taxa_envelhecimento",         label: "Índice de envelhecimento" },
       { value: "razao_sexo",                  label: "Razão de sexo (h/100 mulheres)" },
       { value: "idade_mediana",               label: "Idade mediana (anos)" },
-      { value: "media_moradores",             label: "Média de moradores por domicílio" },
-      { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
-      { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
       { value: "taxa_migracao",               label: "Imigração inter-municipal (%)" },
     ],
   },

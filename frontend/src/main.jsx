@@ -309,6 +309,21 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 15, max: 95 },
     MUNICIPAL: { min: 10, max: 98 },
   },
+  pct_chefia_feminina: {
+    NACIONAL:  { min: 25, max: 65 },
+    ESTADUAL:  { min: 20, max: 70 },
+    MUNICIPAL: { min: 15, max: 75 },
+  },
+  domicilios_maquina_lavar: {
+    NACIONAL:  { min: 0,  max: 100 },
+    ESTADUAL:  { min: 0,  max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  superlotacao_domiciliar: {
+    NACIONAL:  { min: 0,  max: 10  },
+    ESTADUAL:  { min: 0,  max: 20  },
+    MUNICIPAL: { min: 0,  max: 60  },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -407,6 +422,9 @@ function makeTooltip(metrica, cid10) {
     taxa_informalidade:          "Informalidade",
     pct_baixa_renda:             "Baixa renda (≤1/2 SM)",
     pct_renda_trabalho:          "% renda do trabalho",
+    pct_chefia_feminina:         "Chefia feminina",
+    domicilios_maquina_lavar:    "Máquina de lavar",
+    superlotacao_domiciliar:     "Superlotação domiciliar",
   };
 
   const METRICAS_REAIS = new Set([
@@ -429,6 +447,7 @@ function makeTooltip(metrica, cid10) {
     "taxa_migracao", "taxa_escolarizacao_1517",
     "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
     "pct_baixa_renda", "pct_renda_trabalho",
+    "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
   ]);
 
   return ({ object }) => {
