@@ -129,6 +129,7 @@ const GRUPOS_METRICAS = [
       { value: "media_moradores",             label: "Média de moradores por domicílio" },
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "domicilios_maquina_lavar",    label: "Domicílios com máquina de lavar (%)" },
+      { value: "domicilios_alugados",         label: "Domicílios alugados (%)" },
       { value: "superlotacao_domiciliar",     label: "Superlotação — >3 moradores/quarto (%)" },
       { value: "pct_chefia_feminina",         label: "Domicílios com responsável mulher (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
@@ -142,6 +143,7 @@ const GRUPOS_METRICAS = [
       { value: "razao_sexo",                  label: "Razão de sexo (h/100 mulheres)" },
       { value: "idade_mediana",               label: "Idade mediana (anos)" },
       { value: "taxa_migracao",               label: "Imigração inter-municipal (%)" },
+      { value: "media_filhos_mulher",         label: "Média de filhos por mulher 12+ (fecundidade acumulada)" },
     ],
   },
   {

@@ -38,6 +38,8 @@ const METRICAS_LABELS = {
   pct_financiamento:           "Estabelecimentos com financiamento (%)",
   empresas_por_1k:             "Empresas e organizações (por 1k hab.)",
   taxa_migracao:               "Imigração inter-municipal (%)",
+  media_filhos_mulher:         "Média de filhos nascidos vivos por mulher (12+)",
+  domicilios_alugados:         "Domicílios alugados (%)",
   pct_chefia_feminina:         "Domicílios com responsável mulher (%)",
   domicilios_maquina_lavar:    "Domicílios com máquina de lavar (%)",
   superlotacao_domiciliar:     "Superlotação domiciliar — >3 mor./quarto (%)",
@@ -83,6 +85,7 @@ const METRICAS_PERCENT = new Set([
   "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
   "pct_baixa_renda", "pct_renda_trabalho",
   "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
+  "domicilios_alugados",
 ]);
 
 function formatarValor(v, metrica) {
@@ -121,6 +124,7 @@ const METRICAS_MELHOR_ALTO = new Set([
   "empresas_por_1k", "taxa_escolarizacao_1517",
   "pct_renda_trabalho",
   "pct_chefia_feminina", "domicilios_maquina_lavar",
+  "domicilios_alugados",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

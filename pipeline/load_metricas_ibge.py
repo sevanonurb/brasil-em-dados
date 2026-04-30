@@ -1423,6 +1423,72 @@ def carregar_renda_trabalho(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_media_filhos(conn):
+    """
+    T10078 V13316/V13315 — Média de filhos nascidos vivos por mulher 12+ (Censo 2022).
+    V13316 = total filhos tidos nascidos vivos, V13315 = total mulheres 12+.
+    C12232[58896]=Total grupos idade, C1568[120704]=Total instrução, C12293[58898]=Total raça.
+    Paridade acumulada — reflete padrão histórico de fecundidade. 5570 municípios. Média ~2.03.
+    """
+    print("\n=== T10078: Média de filhos por mulher — Censo 2022 ===")
+    base = (
+        f"{SIDRA_BASE}/10078/periodos/2022/variaveis/{{var}}"
+        f"?localidades=N6[all]&classificacao=12232[58896]|1568[120704]|12293[58898]"
+    )
+
+    def fetch_var(var):
+        r = requests.get(base.format(var=var), timeout=120)
+        vals = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        v = s["serie"].get("2022", "-")
+                        if v and v not in ("-", "...", "X", ""):
+                            vals[cod] = float(v)
+                    except (ValueError, KeyError):
+                        pass
+        return vals
+
+    mulheres = fetch_var(13315)
+    filhos   = fetch_var(13316)
+    rows = [
+        (cod, "media_filhos_mulher", 2022, filhos[cod] / mulheres[cod])
+        for cod in mulheres
+        if cod in filhos and mulheres[cod] > 0
+    ]
+    print(f"  media_filhos_mulher: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_domicilios_alugados(conn):
+    """
+    T9929 V1000381 — % domicílios alugados (Censo 2022).
+    C63[1055]=Alugado, C1986[73103]=Total moradores 15+.
+    Proxy de dinamismo imobiliário e acessibilidade à moradia. 5570 municípios. Média ~15.7%.
+    """
+    print("\n=== T9929: % domicílios alugados — Censo 2022 ===")
+    url = (
+        f"{SIDRA_BASE}/9929/periodos/2022/variaveis/1000381"
+        f"?localidades=N6[all]&classificacao=63[1055]|1986[73103]"
+    )
+    r = requests.get(url, timeout=120)
+    rows = []
+    for vb in r.json():
+        for ri in vb.get("resultados", []):
+            for s in ri.get("series", []):
+                try:
+                    cod = int(s["localidade"]["id"])
+                    val = s["serie"].get("2022", "-")
+                    if val and val not in ("-", "...", "X", "", ".."):
+                        rows.append((cod, "domicilios_alugados", 2022, float(val)))
+                except (ValueError, KeyError):
+                    pass
+    print(f"  domicilios_alugados: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_chefia_feminina(conn):
     """
     T9879 V1000800 — % domicílios com pessoa responsável mulher (Censo 2022).
@@ -1586,6 +1652,10 @@ def main():
                         help="Pula % baixa renda (T10296)")
     parser.add_argument("--skip-renda-trabalho", action="store_true",
                         help="Pula % renda do trabalho (T10297)")
+    parser.add_argument("--skip-media-filhos", action="store_true",
+                        help="Pula média de filhos por mulher (T10078)")
+    parser.add_argument("--skip-alugados", action="store_true",
+                        help="Pula % domicílios alugados (T9929)")
     parser.add_argument("--skip-chefia-feminina", action="store_true",
                         help="Pula % chefia feminina (T9879)")
     parser.add_argument("--skip-maquina-lavar", action="store_true",
@@ -1650,6 +1720,14 @@ def main():
 
         if not args.skip_renda_trabalho:
             carregar_renda_trabalho(conn)
+
+        if not args.skip_media_filhos:
+            print("\n──── Censo 2022 — Fecundidade ────")
+            carregar_media_filhos(conn)
+
+        if not args.skip_alugados:
+            print("\n──── Censo 2022 — Condição de Ocupação ────")
+            carregar_domicilios_alugados(conn)
 
         if not args.skip_chefia_feminina:
             print("\n──── Censo 2022 — Domicílios ────")
