@@ -683,6 +683,93 @@ def carregar_internet(conn):
 
 # ─── PAM — Produção Agrícola Municipal ───────────────────────────────────────
 
+def carregar_mortalidade_infantil(conn, anos: list[int]):
+    """
+    Mortalidade infantil (óbitos < 1 ano / nascidos vivos × 1000).
+    Fontes: Estatísticas do Registro Civil — IBGE.
+      T2681 V343 classificacao=260[5922] → óbitos com menos de 1 ano
+      T2612 V218 → nascidos vivos
+    Disponível anualmente (2019-2024+).
+    """
+    print("\n=== Mortalidade Infantil (Registro Civil IBGE) ===")
+
+    for ano in anos:
+        # Óbitos infantis (< 1 ano)
+        url_obitos = (
+            f"{SIDRA_BASE}/2681/periodos/{ano}/variaveis/343"
+            f"?localidades=N6[all]&classificacao=260[5922]"
+        )
+        print(f"  GET T2681 V343 (< 1 ano) {ano}...")
+        for tentativa in range(3):
+            try:
+                r_ob = requests.get(url_obitos, timeout=120)
+                if r_ob.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            print(f"  ERRO: T2681 {ano} falhou")
+            continue
+
+        obitos_map: dict[int, float] = {}
+        for vb in r_ob.json():
+            for ri in vb.get("resultados", []):
+                for serie in ri.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val = serie["serie"].get(str(ano), "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            obitos_map[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+
+        # Nascidos vivos
+        url_nasc = (
+            f"{SIDRA_BASE}/2612/periodos/{ano}/variaveis/218"
+            f"?localidades=N6[all]"
+        )
+        print(f"  GET T2612 V218 (nascidos vivos) {ano}...")
+        for tentativa in range(3):
+            try:
+                r_na = requests.get(url_nasc, timeout=120)
+                if r_na.status_code == 200:
+                    break
+                time.sleep(10)
+            except requests.exceptions.Timeout:
+                time.sleep(10)
+        else:
+            print(f"  ERRO: T2612 {ano} falhou")
+            continue
+
+        nasc_map: dict[int, float] = {}
+        for vb in r_na.json():
+            for ri in vb.get("resultados", []):
+                cats = ri.get("classificacoes", [])
+                if not all(list(c.get("categoria", {}).values()) == ["Total"] for c in cats):
+                    continue
+                for serie in ri.get("series", []):
+                    try:
+                        cod = int(serie["localidade"]["id"])
+                        val = serie["serie"].get(str(ano), "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            nasc_map[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+
+        rows = []
+        for cod, nascimentos in nasc_map.items():
+            if nascimentos <= 0:
+                continue
+            obitos = obitos_map.get(cod, 0.0)
+            tmi = obitos / nascimentos * 1000
+            rows.append((cod, "mortalidade_infantil", ano, tmi))
+
+        print(f"    {ano}: TMI calculada para {len(rows)} municípios"
+              f" (óbitos em {len(obitos_map)}, nascimentos em {len(nasc_map)})")
+        upsert_metricas(rows, conn)
+
+
 def carregar_pecuaria(conn, anos: list[int]):
     """
     T74 — Valor da produção da pecuária municipal (Mil R$) per capita.
@@ -808,6 +895,11 @@ def main():
     parser.add_argument("--anos-pecuaria", nargs="+", type=int,
                         default=[2020, 2021, 2022, 2023],
                         help="Anos para pecuária (padrão: 2020-2023)")
+    parser.add_argument("--skip-infantil", action="store_true",
+                        help="Pula a mortalidade infantil (T2681/T2612)")
+    parser.add_argument("--anos-infantil", nargs="+", type=int,
+                        default=[2019, 2020, 2021, 2022, 2023],
+                        help="Anos para mortalidade infantil (padrão: 2019-2023)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -830,6 +922,9 @@ def main():
             carregar_renda_trabalho(conn)
             carregar_deficiencia(conn)
             carregar_superior_completo(conn)
+
+        if not args.skip_infantil:
+            carregar_mortalidade_infantil(conn, args.anos_infantil)
 
         if not args.skip_pecuaria:
             carregar_pecuaria(conn, args.anos_pecuaria)

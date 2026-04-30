@@ -44,6 +44,8 @@ export const ANOS_POR_METRICA_DEFAULT = {
   renda_domiciliar_mediana_pc: [2022],
   renda_media_trabalho:        [2022],
   renda_mediana_trabalho:      [2022],
+  // Mortalidade Infantil (Registro Civil — anual)
+  mortalidade_infantil:        [2023],
   // Censo 2022 Amostra — Trabalho
   taxa_ocupacao:               [2022],
   // Censo 2022 Amostra — Educação

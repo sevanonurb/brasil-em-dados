@@ -41,6 +41,11 @@ const METRICAS_RANGES = {
     ESTADUAL: { min: 0, max: 150 },
     MUNICIPAL: { min: 0, max: 200 },
   },
+  mortalidade_infantil: {
+    NACIONAL:  { min: 0, max: 30  },   // Brasil 2022: ~10.7/1k
+    ESTADUAL:  { min: 0, max: 60  },
+    MUNICIPAL: { min: 0, max: 100 },
+  },
   pib_per_capita: {
     NACIONAL: { min: 0, max: 80000 },
     ESTADUAL: { min: 0, max: 200000 },
@@ -283,6 +288,7 @@ function makeTooltip(metrica, cid10) {
   const LABEL = {
     taxa_mortalidade:            cid10 ? (CID10_LABELS[cid10] ?? `Mortalidade CID-${cid10}`) : "Mortalidade",
     taxa_homicidio:              "Homicídio",
+    mortalidade_infantil:        "Mort. infantil",
     pib_per_capita:              "PIB per capita",
     receita_per_capita:          "Receita per capita",
     despesa_saude_per_capita:    "Gasto em saúde",
@@ -363,6 +369,8 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
       } else if (metrica === "medicos_por_10k") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
+      } else if (metrica === "mortalidade_infantil") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc.`;
       } else if (metrica === "taxa_natalidade") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k hab.`;
       } else if (metrica === "razao_sexo") {

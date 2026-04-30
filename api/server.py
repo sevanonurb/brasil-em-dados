@@ -49,6 +49,8 @@ FALLBACK = {
     "renda_domiciliar_mediana_pc": [2022],
     "renda_media_trabalho":        [2022],
     "renda_mediana_trabalho":      [2022],
+    # Mortalidade Infantil — Registro Civil IBGE (anual)
+    "mortalidade_infantil":        [2023],
     # Censo 2022 Amostra — Trabalho (estático)
     "taxa_ocupacao":               [2022],
     # Censo 2022 Amostra — Educação (estático)
@@ -141,6 +143,8 @@ def query_anos():
         "renda_domiciliar_mediana_pc": [2022],
         "renda_media_trabalho":        [2022],
         "renda_mediana_trabalho":      [2022],
+        # Mortalidade Infantil — Registro Civil IBGE (anual)
+        "mortalidade_infantil":        anos_metricas.get("mortalidade_infantil", [2023]),
         # Censo 2022 Amostra — Trabalho (estático)
         "taxa_ocupacao":               anos_metricas.get("taxa_ocupacao", [2022]),
         # Censo 2022 Amostra — Educação (estático)

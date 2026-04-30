@@ -8,6 +8,7 @@ import React from "react";
 const METRICAS_LABELS = {
   taxa_mortalidade:            "Mortalidade geral (por 100k hab.)",
   taxa_homicidio:              "Homicídios (por 100k hab.)",
+  mortalidade_infantil:        "Mortalidade infantil (por 1k nasc. vivos)",
   pib_per_capita:              "PIB per capita",
   receita_per_capita:          "Receita municipal per capita",
   despesa_saude_per_capita:    "Gasto em saúde per capita",
@@ -83,7 +84,7 @@ function formatarValor(v, metrica) {
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
 
-const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio"]);
+const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio", "mortalidade_infantil"]);
 const METRICAS_MELHOR_ALTO = new Set([
   "acesso_agua", "acesso_esgoto", "coleta_lixo",
   "taxa_natalidade", "leitos_sus_por_1k", "medicos_por_10k",

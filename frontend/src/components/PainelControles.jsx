@@ -48,6 +48,7 @@ const GRUPOS_METRICAS = [
     opcoes: [
       { value: "taxa_mortalidade",            label: "Mortalidade geral" },
       { value: "taxa_homicidio",              label: "Homicídios" },
+      { value: "mortalidade_infantil",        label: "Mortalidade infantil (por 1k nasc. vivos)" },
       { value: "taxa_natalidade",             label: "Natalidade (nasc./1k hab.)" },
       { value: "leitos_sus_por_1k",           label: "Leitos SUS (por 1k hab.)" },
       { value: "medicos_por_10k",             label: "Médicos (por 10k hab.)" },
