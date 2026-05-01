@@ -1723,6 +1723,96 @@ def carregar_banheiro_exclusivo(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_nupcialidade(conn, anos: list[int]):
+    """
+    Registro Civil — Taxa de nupcialidade (casamentos por 1000 hab.).
+    T4406 V4993 C236[0]|C664[0]|C665[0]|C666[0]|C667[0] — total anual, todos estados civis e idades.
+    N6[all] timed out; fetched UF-by-UF (N6 in N3[uf]).
+    Cobre ~5000 municípios (municípios muito pequenos sem registro retornam '-').
+    """
+    UFS = [11,12,13,14,15,16,17,21,22,23,24,25,26,27,28,29,31,32,33,35,41,42,43,50,51,52,53]
+    CLASSIF = "236[0]|664[0]|665[0]|666[0]|667[0]"
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    print("\n=== Registro Civil: Taxa de Nupcialidade (T4406) ===")
+    for ano in anos:
+        print(f"\n  Ano {ano}:")
+        count_map: dict[int, float] = {}
+        for uf in UFS:
+            url = (
+                f"{SIDRA_BASE}/4406/periodos/{ano}/variaveis/4993"
+                f"?localidades=N6[in N3[{uf}]]&classificacao={CLASSIF}"
+            )
+            r = requests.get(url, timeout=60)
+            if r.status_code != 200:
+                print(f"    UF {uf}: HTTP {r.status_code} — pulando")
+                continue
+            for vb in r.json():
+                for ri in vb.get("resultados", []):
+                    for s in ri.get("series", []):
+                        try:
+                            cod = int(s["localidade"]["id"])
+                            val = s["serie"].get(str(ano), "-")
+                            if val and val not in ("-", "...", "X", ""):
+                                count_map[cod] = float(val)
+                        except (ValueError, KeyError):
+                            pass
+        rows = []
+        for cod, n_casamentos in count_map.items():
+            pop = pop_map.get(cod)
+            if not pop or pop <= 0:
+                continue
+            rows.append((cod, "taxa_nupcialidade", ano, n_casamentos / pop * 1000))
+        print(f"    taxa_nupcialidade: {len(rows)} municípios")
+        upsert_metricas(rows, conn)
+
+
+def carregar_divorcialidade(conn, anos: list[int]):
+    """
+    Registro Civil — Taxa de divorcialidade (divórcios em 1ª instância por 1000 hab.).
+    T5929 V231 C270[0]|C271[0] — total anual, todos tipos de família e número de filhos.
+    N6[all] funciona em ~11s.
+    """
+    CLASSIF = "270[0]|271[0]"
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    print("\n=== Registro Civil: Taxa de Divorcialidade (T5929) ===")
+    for ano in anos:
+        url = (
+            f"{SIDRA_BASE}/5929/periodos/{ano}/variaveis/231"
+            f"?localidades=N6[all]&classificacao={CLASSIF}"
+        )
+        r = requests.get(url, timeout=120)
+        if r.status_code != 200:
+            print(f"  Ano {ano}: HTTP {r.status_code} — pulando")
+            continue
+        count_map: dict[int, float] = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get(str(ano), "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            count_map[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        rows = []
+        for cod, n_divorcios in count_map.items():
+            pop = pop_map.get(cod)
+            if not pop or pop <= 0:
+                continue
+            rows.append((cod, "taxa_divorcialidade", ano, n_divorcios / pop * 1000))
+        print(f"  Ano {ano}: {len(rows)} municípios")
+        upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1822,6 +1912,16 @@ def main():
                         help="Pula % domicílios com paredes de alvenaria (T9928)")
     parser.add_argument("--skip-banheiro", action="store_true",
                         help="Pula % moradores com banheiro exclusivo (T9397)")
+    parser.add_argument("--skip-nupcialidade", action="store_true",
+                        help="Pula taxa de nupcialidade (RC T4406)")
+    parser.add_argument("--anos-nupcialidade", nargs="+", type=int,
+                        default=[2018, 2019, 2020, 2021, 2022, 2023, 2024],
+                        help="Anos para nupcialidade (padrão: 2018-2024)")
+    parser.add_argument("--skip-divorcialidade", action="store_true",
+                        help="Pula taxa de divorcialidade (RC T5929)")
+    parser.add_argument("--anos-divorcialidade", nargs="+", type=int,
+                        default=[2018, 2019, 2020, 2021, 2022, 2023, 2024],
+                        help="Anos para divorcialidade (padrão: 2018-2024)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1913,6 +2013,15 @@ def main():
 
         if not args.skip_banheiro:
             carregar_banheiro_exclusivo(conn)
+
+        if not args.skip_nupcialidade:
+            print("\n──── Registro Civil — Nupcialidade e Divorcialidade ────")
+            carregar_nupcialidade(conn, args.anos_nupcialidade)
+
+        if not args.skip_divorcialidade:
+            if args.skip_nupcialidade:
+                print("\n──── Registro Civil — Nupcialidade e Divorcialidade ────")
+            carregar_divorcialidade(conn, args.anos_divorcialidade)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)

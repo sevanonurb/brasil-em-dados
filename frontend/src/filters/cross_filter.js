@@ -96,6 +96,9 @@ export const ANOS_POR_METRICA_DEFAULT = {
   pct_urbano:                  [2022],
   pct_alvenaria:               [2022],
   pct_banheiro_exclusivo:      [2022],
+  // Registro Civil — Nupcialidade e Divorcialidade (anual)
+  taxa_nupcialidade:           [2024, 2023, 2022, 2021, 2020, 2019, 2018],
+  taxa_divorcialidade:         [2024, 2023, 2022, 2021, 2020, 2019, 2018],
 };
 
 // Re-exporta para compatibilidade com imports existentes

@@ -140,6 +140,13 @@ const GRUPOS_METRICAS = [
     ],
   },
   {
+    label: "Registro Civil (anual)",
+    opcoes: [
+      { value: "taxa_nupcialidade",           label: "Taxa de nupcialidade (casamentos / 1000 hab.)" },
+      { value: "taxa_divorcialidade",         label: "Taxa de divorcialidade (divórcios / 1000 hab.)" },
+    ],
+  },
+  {
     label: "Demográfico (Censo 2022)",
     opcoes: [
       { value: "densidade_pop",               label: "Densidade demográfica (hab/km²)" },

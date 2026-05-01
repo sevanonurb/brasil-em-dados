@@ -355,6 +355,16 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 20, max: 100 },
     MUNICIPAL: { min: 10, max: 100 },
   },
+  taxa_nupcialidade: {
+    NACIONAL:  { min: 0, max: 10 },
+    ESTADUAL:  { min: 0, max: 15 },
+    MUNICIPAL: { min: 0, max: 20 },
+  },
+  taxa_divorcialidade: {
+    NACIONAL:  { min: 0, max: 5 },
+    ESTADUAL:  { min: 0, max: 8 },
+    MUNICIPAL: { min: 0, max: 12 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -462,6 +472,8 @@ function makeTooltip(metrica, cid10) {
     pct_urbano:                  "Pop. urbana",
     pct_alvenaria:               "Alvenaria",
     pct_banheiro_exclusivo:      "Banheiro exclusivo",
+    taxa_nupcialidade:           "Nupcialidade",
+    taxa_divorcialidade:         "Divorcialidade",
   };
 
   const METRICAS_REAIS = new Set([
@@ -517,8 +529,8 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
       } else if (metrica === "mortalidade_infantil") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc.`;
-      } else if (metrica === "taxa_natalidade") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k hab.`;
+      } else if (metrica === "taxa_natalidade" || metrica === "taxa_nupcialidade" || metrica === "taxa_divorcialidade") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
       } else if (metrica === "razao_sexo") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> h/100 mul.`;
       } else if (metrica === "media_moradores") {

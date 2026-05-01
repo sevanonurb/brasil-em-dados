@@ -42,6 +42,8 @@ const METRICAS_LABELS = {
   pct_urbano:                  "População urbana (%)",
   pct_alvenaria:               "Domicílios com paredes de alvenaria (%)",
   pct_banheiro_exclusivo:      "Moradores em domicílios com banheiro exclusivo (%)",
+  taxa_nupcialidade:           "Taxa de nupcialidade (casamentos / 1000 hab.)",
+  taxa_divorcialidade:         "Taxa de divorcialidade (divórcios / 1000 hab.)",
   domicilios_alugados:         "Domicílios alugados (%)",
   domicilios_monoparentais:    "Domicílios monoparentais — sem cônjuge com filhos (%)",
   pct_chefia_feminina:         "Domicílios com responsável mulher (%)",
