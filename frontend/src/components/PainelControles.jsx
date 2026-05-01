@@ -134,6 +134,9 @@ const GRUPOS_METRICAS = [
       { value: "superlotacao_domiciliar",     label: "Superlotação — >3 moradores/quarto (%)" },
       { value: "pct_chefia_feminina",         label: "Domicílios com responsável mulher (%)" },
       { value: "pop_favelas_pct",             label: "Pop. em aglomerados subnormais (%)" },
+      { value: "pct_urbano",                  label: "Pop. urbana (%)" },
+      { value: "pct_alvenaria",               label: "Domicílios com paredes de alvenaria (%)" },
+      { value: "pct_banheiro_exclusivo",      label: "Moradores com banheiro exclusivo (%)" },
     ],
   },
   {

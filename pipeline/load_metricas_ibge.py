@@ -1598,6 +1598,131 @@ def carregar_superlotacao(conn):
     upsert_metricas(rows, conn)
 
 
+def carregar_pct_urbano(conn):
+    """
+    T9923 V93 — % população residente em área urbana (Censo 2022).
+    C1[1]=Urbana, C1[6795]=Total.
+    Indica nível de urbanização do município. Cobre 5570 municípios.
+    """
+    print("\n=== T9923: % população urbana — Censo 2022 ===")
+
+    def fetch_cat(cat_id):
+        url = (
+            f"{SIDRA_BASE}/9923/periodos/2022/variaveis/93"
+            f"?localidades=N6[all]&classificacao=1[{cat_id}]"
+        )
+        r = requests.get(url, timeout=120)
+        result = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            result[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        print(f"    C1[{cat_id}]: {len(result)} mun.")
+        return result
+
+    total_map  = fetch_cat(6795)  # Total
+    urbana_map = fetch_cat(1)     # Urbana
+
+    rows = []
+    for cod, total in total_map.items():
+        if total > 0 and cod in urbana_map:
+            rows.append((cod, "pct_urbano", 2022, urbana_map[cod] / total * 100))
+    print(f"  pct_urbano: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_paredes_alvenaria(conn):
+    """
+    T9928 V381 — % domicílios com paredes de alvenaria (Censo 2022).
+    C137[73073]=alvenaria com revestimento + C137[12194]=alvenaria sem revestimento.
+    Proxy de qualidade habitacional. Cobre 5570 municípios.
+    C63[95826]=Total condição, C125[2932]=Total tipo.
+    """
+    print("\n=== T9928: % domicílios com paredes de alvenaria — Censo 2022 ===")
+
+    classif_base = "63[95826]|125[2932]"
+
+    def fetch_cat(cat_id):
+        url = (
+            f"{SIDRA_BASE}/9928/periodos/2022/variaveis/381"
+            f"?localidades=N6[all]&classificacao=137[{cat_id}]|{classif_base}"
+        )
+        r = requests.get(url, timeout=120)
+        result = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            result[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        print(f"    C137[{cat_id}]: {len(result)} mun.")
+        return result
+
+    total_map    = fetch_cat(13233)  # Total
+    alv_rev_map  = fetch_cat(73073)  # Alvenaria com revestimento
+    alv_sem_map  = fetch_cat(12194)  # Alvenaria sem revestimento
+
+    rows = []
+    for cod, total in total_map.items():
+        if total > 0:
+            alv = alv_rev_map.get(cod, 0.0) + alv_sem_map.get(cod, 0.0)
+            rows.append((cod, "pct_alvenaria", 2022, alv / total * 100))
+    print(f"  pct_alvenaria: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
+def carregar_banheiro_exclusivo(conn):
+    """
+    T9397 V382 — % moradores em domicílios com banheiro de uso exclusivo (Censo 2022).
+    C458[12032]=Tinham banheiro de uso exclusivo, C458[72117]=Total.
+    C58[95253]=Total idade, C86[95251]=Total raça, C11558[46292]=Total esgoto.
+    Indica qualidade sanitária habitacional. Cobre 5570 municípios.
+    """
+    print("\n=== T9397: % moradores com banheiro exclusivo — Censo 2022 ===")
+
+    classif_base = "58[95253]|86[95251]|11558[46292]"
+
+    def fetch_cat(cat_id):
+        url = (
+            f"{SIDRA_BASE}/9397/periodos/2022/variaveis/382"
+            f"?localidades=N6[all]&classificacao=458[{cat_id}]|{classif_base}"
+        )
+        r = requests.get(url, timeout=120)
+        result = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get("2022", "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            result[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        print(f"    C458[{cat_id}]: {len(result)} mun.")
+        return result
+
+    total_map    = fetch_cat(72117)  # Total
+    banheiro_map = fetch_cat(12032)  # Com banheiro exclusivo
+
+    rows = []
+    for cod, total in total_map.items():
+        if total > 0 and cod in banheiro_map:
+            rows.append((cod, "pct_banheiro_exclusivo", 2022, banheiro_map[cod] / total * 100))
+    print(f"  pct_banheiro_exclusivo: {len(rows)} mun.")
+    upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1691,6 +1816,12 @@ def main():
                         help="Pula % domicílios com máquina de lavar (T9935)")
     parser.add_argument("--skip-superlotacao", action="store_true",
                         help="Pula % superlotação domiciliar (T9933)")
+    parser.add_argument("--skip-pct-urbano", action="store_true",
+                        help="Pula % população urbana (T9923)")
+    parser.add_argument("--skip-alvenaria", action="store_true",
+                        help="Pula % domicílios com paredes de alvenaria (T9928)")
+    parser.add_argument("--skip-banheiro", action="store_true",
+                        help="Pula % moradores com banheiro exclusivo (T9397)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1771,6 +1902,17 @@ def main():
 
         if not args.skip_superlotacao:
             carregar_superlotacao(conn)
+
+        if not args.skip_pct_urbano:
+            print("\n──── Censo 2022 — Urbanização ────")
+            carregar_pct_urbano(conn)
+
+        if not args.skip_alvenaria:
+            print("\n──── Censo 2022 — Qualidade Habitacional ────")
+            carregar_paredes_alvenaria(conn)
+
+        if not args.skip_banheiro:
+            carregar_banheiro_exclusivo(conn)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)

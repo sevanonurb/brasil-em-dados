@@ -92,6 +92,10 @@ export const ANOS_POR_METRICA_DEFAULT = {
   domicilios_monoparentais:    [2022],
   // Censo 2022 — Fecundidade (estático)
   media_filhos_mulher:         [2022],
+  // Censo 2022 — Urbanização e Qualidade Habitacional (estático)
+  pct_urbano:                  [2022],
+  pct_alvenaria:               [2022],
+  pct_banheiro_exclusivo:      [2022],
 };
 
 // Re-exporta para compatibilidade com imports existentes

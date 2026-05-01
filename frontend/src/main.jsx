@@ -339,6 +339,22 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 5,  max: 28  },
     MUNICIPAL: { min: 4,  max: 28  },
   },
+  // Urbanização e Qualidade Habitacional — Censo 2022
+  pct_urbano: {
+    NACIONAL:  { min: 0,  max: 100 },
+    ESTADUAL:  { min: 0,  max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_alvenaria: {
+    NACIONAL:  { min: 20, max: 100 },
+    ESTADUAL:  { min: 10, max: 100 },
+    MUNICIPAL: { min: 5,  max: 100 },
+  },
+  pct_banheiro_exclusivo: {
+    NACIONAL:  { min: 30, max: 100 },
+    ESTADUAL:  { min: 20, max: 100 },
+    MUNICIPAL: { min: 10, max: 100 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)
@@ -443,6 +459,9 @@ function makeTooltip(metrica, cid10) {
     domicilios_alugados:         "Domicílios alugados",
     domicilios_monoparentais:    "Domicílios monoparentais",
     media_filhos_mulher:         "Média filhos/mulher",
+    pct_urbano:                  "Pop. urbana",
+    pct_alvenaria:               "Alvenaria",
+    pct_banheiro_exclusivo:      "Banheiro exclusivo",
   };
 
   const METRICAS_REAIS = new Set([
@@ -467,6 +486,7 @@ function makeTooltip(metrica, cid10) {
     "pct_baixa_renda", "pct_renda_trabalho",
     "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
     "domicilios_alugados", "domicilios_monoparentais",
+    "pct_urbano", "pct_alvenaria", "pct_banheiro_exclusivo",
   ]);
 
   return ({ object }) => {
