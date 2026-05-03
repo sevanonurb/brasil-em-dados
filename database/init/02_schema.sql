@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS geo.setores_censitarios (
     cod_uf         SMALLINT    NOT NULL,
     tipo_setor     SMALLINT,   -- 1=urbano, 2=rural, 3=aglomerado subnormal
     geom           geometry(MultiPolygon, 4674) NOT NULL,
+    geom_3857      geometry(MultiPolygon, 3857),            -- pré-projetado para bbox-filter em tiles (preenchido pelo pipeline)
+    geom_3857_simplified geometry(MultiPolygon, 3857),      -- simplificado ~30m, usado em zoom 9-12
     area_km2       NUMERIC(10, 4),
     domicilios_total INTEGER,
     populacao_total  INTEGER,
@@ -273,6 +275,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_indicadores_uf_pk
     ON api.indicadores_uf (cod_uf);
 CREATE INDEX IF NOT EXISTS idx_indicadores_uf_geom
     ON api.indicadores_uf USING GIST (geom);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABELA: Métricas adicionais por município × indicador × ano
+-- Armazena todos os indicadores carregados pelos scripts de pipeline que
+-- não têm tabelas-fato próprias (Censo, PAM, RGF, CEMPRE, etc.).
+-- As tile functions usam esta tabela via ELSE genérico para qualquer
+-- metrica não tratada explicitamente no CASE dos tiles_ufs/tiles_municipios.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS api.metricas_municipio (
+    cod_municipio  INTEGER  NOT NULL,  -- 7 dígitos IBGE (mesmo que geo.municipios.cod_ibge_7)
+    metrica        TEXT     NOT NULL,
+    ano            SMALLINT NOT NULL,
+    valor          FLOAT8,
+    PRIMARY KEY (cod_municipio, metrica, ano)
+);
+
+CREATE INDEX IF NOT EXISTS idx_metricas_municipio_metrica_ano
+    ON api.metricas_municipio (metrica, ano);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SCHEMA: Educação

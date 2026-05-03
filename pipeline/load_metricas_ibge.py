@@ -1395,7 +1395,7 @@ def carregar_baixa_renda(conn):
     upsert_metricas(rows, conn)
 
 
-def carregar_renda_trabalho(conn):
+def carregar_pct_renda_trabalho(conn):
     """
     T10297 V13504 — % do rendimento domiciliar proveniente de trabalho (Censo 2022).
     C11308[79451] = Rendimento de todos os trabalhos (% do total).
@@ -1813,6 +1813,108 @@ def carregar_divorcialidade(conn, anos: list[int]):
         upsert_metricas(rows, conn)
 
 
+def carregar_separacoes(conn, anos: list[int]):
+    """
+    Registro Civil — Taxa de separações judiciais (por 1000 hab.).
+    T5922 V231 — Separações judiciais concedidas.
+    N6[all] funciona em tempo razoável.
+    """
+    print("\n=== Registro Civil: Taxa de Separações Judiciais (T5922) ===")
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop_map = {row[0]: row[1] for row in cur.fetchall()}
+
+    for ano in anos:
+        url = (
+            f"{SIDRA_BASE}/5922/periodos/{ano}/variaveis/231"
+            f"?localidades=N6[all]"
+        )
+        r = requests.get(url, timeout=120)
+        if r.status_code != 200:
+            print(f"  Ano {ano}: HTTP {r.status_code} — pulando")
+            continue
+        count_map: dict[int, float] = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get(str(ano), "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            count_map[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+        rows = []
+        for cod, n_sep in count_map.items():
+            pop = pop_map.get(cod)
+            if not pop or pop <= 0:
+                continue
+            rows.append((cod, "taxa_separacao", ano, n_sep / pop * 1000))
+        print(f"  Ano {ano}: {len(rows)} municípios")
+        upsert_metricas(rows, conn)
+
+
+def carregar_obitos_fetais(conn, anos: list[int]):
+    """
+    Registro Civil — Taxa de óbitos fetais (por 1000 nascidos vivos).
+    T7328 V343 — Óbitos fetais registrados.
+    T2612 V218 — Nascidos vivos registrados (denominador).
+    N6[all] para ambas as tabelas.
+    """
+    print("\n=== Registro Civil: Taxa de Óbitos Fetais (T7328 / T2612) ===")
+
+    for ano in anos:
+        # Óbitos fetais
+        url_obitos = (
+            f"{SIDRA_BASE}/7328/periodos/{ano}/variaveis/343"
+            f"?localidades=N6[all]"
+        )
+        r = requests.get(url_obitos, timeout=120)
+        if r.status_code != 200:
+            print(f"  Ano {ano}: HTTP {r.status_code} (T7328) — pulando")
+            continue
+        obitos_map: dict[int, float] = {}
+        for vb in r.json():
+            for ri in vb.get("resultados", []):
+                for s in ri.get("series", []):
+                    try:
+                        cod = int(s["localidade"]["id"])
+                        val = s["serie"].get(str(ano), "-")
+                        if val and val not in ("-", "...", "X", ""):
+                            obitos_map[cod] = float(val)
+                    except (ValueError, KeyError):
+                        pass
+
+        # Nascidos vivos
+        url_nasc = (
+            f"{SIDRA_BASE}/2612/periodos/{ano}/variaveis/218"
+            f"?localidades=N6[all]"
+        )
+        r2 = requests.get(url_nasc, timeout=120)
+        nascidos_map: dict[int, float] = {}
+        if r2.status_code == 200:
+            for vb in r2.json():
+                for ri in vb.get("resultados", []):
+                    for s in ri.get("series", []):
+                        try:
+                            cod = int(s["localidade"]["id"])
+                            val = s["serie"].get(str(ano), "-")
+                            if val and val not in ("-", "...", "X", ""):
+                                nascidos_map[cod] = float(val)
+                        except (ValueError, KeyError):
+                            pass
+
+        rows = []
+        for cod, n_obitos in obitos_map.items():
+            n_nasc = nascidos_map.get(cod)
+            if not n_nasc or n_nasc <= 0:
+                continue
+            rows.append((cod, "taxa_obito_fetal", ano, n_obitos / n_nasc * 1000))
+        print(f"  Ano {ano}: {len(rows)} municípios (obitos {len(obitos_map)}, nasc {len(nascidos_map)})")
+        upsert_metricas(rows, conn)
+
+
 def carregar_pam(conn, anos: list[int]):
     """
     PAM — Valor Bruto da Produção agrícola per capita.
@@ -1922,6 +2024,16 @@ def main():
     parser.add_argument("--anos-divorcialidade", nargs="+", type=int,
                         default=[2018, 2019, 2020, 2021, 2022, 2023, 2024],
                         help="Anos para divorcialidade (padrão: 2018-2024)")
+    parser.add_argument("--skip-separacao", action="store_true",
+                        help="Pula taxa de separação judicial (RC T5922)")
+    parser.add_argument("--anos-separacao", nargs="+", type=int,
+                        default=[2018, 2019, 2020, 2021, 2022, 2023, 2024],
+                        help="Anos para separações (padrão: 2018-2024)")
+    parser.add_argument("--skip-obito-fetal", action="store_true",
+                        help="Pula taxa de óbito fetal (RC T7328/T2612)")
+    parser.add_argument("--anos-obito-fetal", nargs="+", type=int,
+                        default=[2018, 2019, 2020, 2021, 2022, 2023],
+                        help="Anos para óbitos fetais (padrão: 2018-2023)")
     args = parser.parse_args()
 
     print("Conectando ao banco...")
@@ -1940,8 +2052,8 @@ def main():
             carregar_taxa_ocupacao(conn)
             print("\n──── Censo 2022 Amostra — Renda e Trabalho ────")
             carregar_renda_domiciliar(conn)
-            carregar_anos_estudo(conn)
             carregar_renda_trabalho(conn)
+            carregar_anos_estudo(conn)
             carregar_deficiencia(conn)
             carregar_superior_completo(conn)
 
@@ -1979,7 +2091,7 @@ def main():
             carregar_baixa_renda(conn)
 
         if not args.skip_renda_trabalho:
-            carregar_renda_trabalho(conn)
+            carregar_pct_renda_trabalho(conn)
 
         if not args.skip_media_filhos:
             print("\n──── Censo 2022 — Fecundidade ────")
@@ -2022,6 +2134,14 @@ def main():
             if args.skip_nupcialidade:
                 print("\n──── Registro Civil — Nupcialidade e Divorcialidade ────")
             carregar_divorcialidade(conn, args.anos_divorcialidade)
+
+        if not args.skip_separacao:
+            print("\n──── Registro Civil — Separações Judiciais ────")
+            carregar_separacoes(conn, args.anos_separacao)
+
+        if not args.skip_obito_fetal:
+            print("\n──── Registro Civil — Óbitos Fetais ────")
+            carregar_obitos_fetais(conn, args.anos_obito_fetal)
 
         if not args.skip_cempre:
             carregar_cempre(conn, args.anos_cempre)

@@ -395,22 +395,44 @@ DECLARE
     v_sexo        CHAR(1)  := NULLIF(query_params->>'sexo', '');
 BEGIN
     -- z < 6: centroides (dots) — todos os setores como pontos coloridos.
+    -- Usa fontes primárias com v_ano dinâmico (sem materialized view hardcoded).
     IF z < 6 THEN
         SELECT ST_AsMVT(tile, 'setores', 4096, 'geom_mvt')
         INTO result
         FROM (
+            WITH mortalidade_mun AS (
+                SELECT s.cod_municipio, COUNT(*)::FLOAT8 AS contagem
+                FROM saude.sim_mortalidade s
+                WHERE s.ano = v_ano
+                  AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
+                  AND (
+                      (v_metrica = 'taxa_mortalidade' AND (
+                          v_cid10 IS NULL
+                          OR (v_cid10 = 'suicidio' AND s.cid10_codigo >= 'X60' AND s.cid10_codigo < 'X85')
+                          OR (v_cid10 <> 'suicidio' AND s.cid10_capitulo = v_cid10)
+                      ))
+                      OR (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  )
+                GROUP BY s.cod_municipio
+            )
             SELECT
                 sc.cod_setor,
                 sc.cod_municipio,
                 sc.populacao_total,
-                CASE v_metrica
-                    WHEN 'taxa_mortalidade'            THEN im.taxa_mortalidade_2023::FLOAT8
-                    WHEN 'taxa_homicidio'              THEN im.taxa_homicidio_2023::FLOAT8
-                    WHEN 'pib_per_capita'              THEN im.pib_per_capita_2022::FLOAT8
-                    WHEN 'receita_per_capita'          THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
-                    WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
-                    WHEN 'despesa_educacao_per_capita' THEN im.despesa_educacao_per_capita_2022::FLOAT8
-                    WHEN 'densidade_pop'               THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                CASE
+                    WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
+                        ROUND((COALESCE(ma.contagem, 0) * 100000.0
+                               / NULLIF(m.populacao_2022::FLOAT8, 0))::NUMERIC, 1)::FLOAT8
+                    WHEN v_metrica = 'pib_per_capita' THEN
+                        e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'receita_per_capita' THEN
+                        e.receita_total::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'despesa_saude_per_capita' THEN
+                        e.despesa_saude::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'despesa_educacao_per_capita' THEN
+                        e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'densidade_pop' THEN
+                        sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
                     ELSE (
                         SELECT mm.valor FROM api.metricas_municipio mm
                         WHERE mm.cod_municipio = sc.cod_municipio
@@ -421,7 +443,10 @@ BEGIN
                 END AS valor_metrica,
                 ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
             FROM geo.setores_censitarios sc
-            JOIN api.indicadores_municipio im ON im.cod_ibge_7 = sc.cod_municipio
+            JOIN geo.municipios m ON m.cod_ibge_7 = sc.cod_municipio
+            LEFT JOIN economia.siconfi_municipios e
+                ON e.cod_municipio = sc.cod_municipio AND e.ano = v_ano
+            LEFT JOIN mortalidade_mun ma ON ma.cod_municipio = sc.cod_municipio / 10
             WHERE sc.geom_3857 && bbox_3857
               AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
         ) tile
@@ -430,23 +455,44 @@ BEGIN
     END IF;
 
     -- 6 <= z < 9: polígonos territoriais completos.
-    -- Usa api.indicadores_municipio (materializado) para evitar reprocessar SIM inteira.
+    -- Usa fontes primárias com v_ano dinâmico (sem materialized view hardcoded).
     IF z < 9 THEN
         SELECT ST_AsMVT(tile, 'setores', 4096, 'geom_mvt')
         INTO result
         FROM (
+            WITH mortalidade_mun AS (
+                SELECT s.cod_municipio, COUNT(*)::FLOAT8 AS contagem
+                FROM saude.sim_mortalidade s
+                WHERE s.ano = v_ano
+                  AND v_metrica IN ('taxa_mortalidade', 'taxa_homicidio')
+                  AND (
+                      (v_metrica = 'taxa_mortalidade' AND (
+                          v_cid10 IS NULL
+                          OR (v_cid10 = 'suicidio' AND s.cid10_codigo >= 'X60' AND s.cid10_codigo < 'X85')
+                          OR (v_cid10 <> 'suicidio' AND s.cid10_capitulo = v_cid10)
+                      ))
+                      OR (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
+                  )
+                GROUP BY s.cod_municipio
+            )
             SELECT
                 sc.cod_setor,
                 sc.cod_municipio,
                 sc.populacao_total,
-                CASE v_metrica
-                    WHEN 'taxa_mortalidade'            THEN im.taxa_mortalidade_2023::FLOAT8
-                    WHEN 'taxa_homicidio'              THEN im.taxa_homicidio_2023::FLOAT8
-                    WHEN 'pib_per_capita'              THEN im.pib_per_capita_2022::FLOAT8
-                    WHEN 'receita_per_capita'          THEN (im.receita_municipal_2022 / NULLIF(im.populacao_2022, 0))::FLOAT8
-                    WHEN 'despesa_saude_per_capita'    THEN im.despesa_saude_per_capita_2022::FLOAT8
-                    WHEN 'despesa_educacao_per_capita' THEN im.despesa_educacao_per_capita_2022::FLOAT8
-                    WHEN 'densidade_pop'               THEN (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                CASE
+                    WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
+                        ROUND((COALESCE(ma.contagem, 0) * 100000.0
+                               / NULLIF(m.populacao_2022::FLOAT8, 0))::NUMERIC, 1)::FLOAT8
+                    WHEN v_metrica = 'pib_per_capita' THEN
+                        e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'receita_per_capita' THEN
+                        e.receita_total::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'despesa_saude_per_capita' THEN
+                        e.despesa_saude::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'despesa_educacao_per_capita' THEN
+                        e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
+                    WHEN v_metrica = 'densidade_pop' THEN
+                        sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
                     ELSE (
                         SELECT mm.valor FROM api.metricas_municipio mm
                         WHERE mm.cod_municipio = sc.cod_municipio
@@ -457,7 +503,10 @@ BEGIN
                 END AS valor_metrica,
                 ST_AsMVTGeom(sc.geom_3857, bbox_3857, 4096, 4, true) AS geom_mvt
             FROM geo.setores_censitarios sc
-            JOIN api.indicadores_municipio im ON im.cod_ibge_7 = sc.cod_municipio
+            JOIN geo.municipios m ON m.cod_ibge_7 = sc.cod_municipio
+            LEFT JOIN economia.siconfi_municipios e
+                ON e.cod_municipio = sc.cod_municipio AND e.ano = v_ano
+            LEFT JOIN mortalidade_mun ma ON ma.cod_municipio = sc.cod_municipio / 10
             WHERE sc.geom_3857 && bbox_3857
               AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
         ) tile

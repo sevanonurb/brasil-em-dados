@@ -365,6 +365,234 @@ const METRICAS_RANGES = {
     ESTADUAL:  { min: 0, max: 8 },
     MUNICIPAL: { min: 0, max: 12 },
   },
+  // Registro Civil — Separações e Óbitos Fetais
+  taxa_separacao: {
+    NACIONAL:  { min: 0, max: 1.5 },
+    ESTADUAL:  { min: 0, max: 3   },
+    MUNICIPAL: { min: 0, max: 6   },
+  },
+  taxa_obito_fetal: {
+    NACIONAL:  { min: 5,  max: 20 },
+    ESTADUAL:  { min: 0,  max: 35 },
+    MUNICIPAL: { min: 0,  max: 60 },
+  },
+  // Equipamentos Domésticos — Censo 2022 (% domicílios)
+  pct_geladeira: {
+    NACIONAL:  { min: 80, max: 100 },
+    ESTADUAL:  { min: 60, max: 100 },
+    MUNICIPAL: { min: 40, max: 100 },
+  },
+  pct_ar_condicionado: {
+    NACIONAL:  { min: 0,  max: 60  },
+    ESTADUAL:  { min: 0,  max: 80  },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_freezer: {
+    NACIONAL:  { min: 0,  max: 60  },
+    ESTADUAL:  { min: 0,  max: 80  },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_tv: {
+    NACIONAL:  { min: 60, max: 100 },
+    ESTADUAL:  { min: 50, max: 100 },
+    MUNICIPAL: { min: 30, max: 100 },
+  },
+  pct_automovel_domicilio: {
+    NACIONAL:  { min: 0,  max: 70  },
+    ESTADUAL:  { min: 0,  max: 80  },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_motocicleta_domicilio: {
+    NACIONAL:  { min: 0,  max: 60  },
+    ESTADUAL:  { min: 0,  max: 70  },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_microondas: {
+    NACIONAL:  { min: 0,  max: 90  },
+    ESTADUAL:  { min: 0,  max: 100 },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  pct_computador: {
+    NACIONAL:  { min: 0,  max: 80  },
+    ESTADUAL:  { min: 0,  max: 90  },
+    MUNICIPAL: { min: 0,  max: 100 },
+  },
+  // PPM — Rebanhos (cabeças/hab. ou cabeças/km²)
+  rebanho_bovino_por_km2: {
+    NACIONAL:  { min: 0, max: 0.6  },
+    ESTADUAL:  { min: 0, max: 2    },
+    MUNICIPAL: { min: 0, max: 8    },
+  },
+  rebanho_bovino_por_hab: {
+    NACIONAL:  { min: 0, max: 6    },
+    ESTADUAL:  { min: 0, max: 25   },
+    MUNICIPAL: { min: 0, max: 80   },
+  },
+  rebanho_equino_por_hab: {
+    NACIONAL:  { min: 0, max: 0.3  },
+    ESTADUAL:  { min: 0, max: 1    },
+    MUNICIPAL: { min: 0, max: 4    },
+  },
+  rebanho_suino_por_hab: {
+    NACIONAL:  { min: 0, max: 1.5  },
+    ESTADUAL:  { min: 0, max: 5    },
+    MUNICIPAL: { min: 0, max: 20   },
+  },
+  rebanho_ovino_por_hab: {
+    NACIONAL:  { min: 0, max: 0.8  },
+    ESTADUAL:  { min: 0, max: 3    },
+    MUNICIPAL: { min: 0, max: 15   },
+  },
+  rebanho_caprino_por_hab: {
+    NACIONAL:  { min: 0, max: 0.4  },
+    ESTADUAL:  { min: 0, max: 1.5  },
+    MUNICIPAL: { min: 0, max: 8    },
+  },
+  rebanho_galinaceos_por_hab: {
+    NACIONAL:  { min: 0, max: 30   },
+    ESTADUAL:  { min: 0, max: 80   },
+    MUNICIPAL: { min: 0, max: 300  },
+  },
+  // PPM — Produção Pecuária
+  producao_leite_por_vaca: {
+    NACIONAL:  { min: 500,  max: 4000  },
+    ESTADUAL:  { min: 200,  max: 6000  },
+    MUNICIPAL: { min: 0,    max: 8000  },
+  },
+  producao_leite_per_capita: {
+    NACIONAL:  { min: 0, max: 1500  },
+    ESTADUAL:  { min: 0, max: 5000  },
+    MUNICIPAL: { min: 0, max: 15000 },
+  },
+  producao_mel_por_colmeia: {
+    NACIONAL:  { min: 5,  max: 35  },
+    ESTADUAL:  { min: 2,  max: 50  },
+    MUNICIPAL: { min: 0,  max: 80  },
+  },
+  producao_mel_kg: {
+    NACIONAL:  { min: 0, max: 8000000  },
+    ESTADUAL:  { min: 0, max: 600000   },
+    MUNICIPAL: { min: 0, max: 100000   },
+  },
+  producao_ovos_total: {
+    NACIONAL:  { min: 0, max: 600000   },
+    ESTADUAL:  { min: 0, max: 60000    },
+    MUNICIPAL: { min: 0, max: 10000    },
+  },
+  producao_ovos_per_capita: {
+    NACIONAL:  { min: 0, max: 50   },
+    ESTADUAL:  { min: 0, max: 150  },
+    MUNICIPAL: { min: 0, max: 500  },
+  },
+  // SINAN — Epidemiologia (/100k hab.)
+  incidencia_dengue: {
+    NACIONAL:  { min: 0, max: 2000  },
+    ESTADUAL:  { min: 0, max: 6000  },
+    MUNICIPAL: { min: 0, max: 15000 },
+  },
+  incidencia_tuberculose: {
+    NACIONAL:  { min: 0, max: 60   },
+    ESTADUAL:  { min: 0, max: 120  },
+    MUNICIPAL: { min: 0, max: 250  },
+  },
+  incidencia_hanseniase: {
+    NACIONAL:  { min: 0, max: 30  },
+    ESTADUAL:  { min: 0, max: 60  },
+    MUNICIPAL: { min: 0, max: 120 },
+  },
+  incidencia_leishmaniose: {
+    NACIONAL:  { min: 0, max: 15  },
+    ESTADUAL:  { min: 0, max: 30  },
+    MUNICIPAL: { min: 0, max: 80  },
+  },
+  // SIH — Internações SUS
+  taxa_internacao_sus: {
+    NACIONAL:  { min: 40, max: 130  },   // /1k hab. — Brasil ~95/1k
+    ESTADUAL:  { min: 20, max: 180  },
+    MUNICIPAL: { min: 0,  max: 250  },
+  },
+  taxa_internacao_cardiovascular: {
+    NACIONAL:  { min: 0, max: 250  },    // /100k hab.
+    ESTADUAL:  { min: 0, max: 500  },
+    MUNICIPAL: { min: 0, max: 800  },
+  },
+  taxa_internacao_respiratoria: {
+    NACIONAL:  { min: 0, max: 120  },
+    ESTADUAL:  { min: 0, max: 250  },
+    MUNICIPAL: { min: 0, max: 500  },
+  },
+  taxa_internacao_mental: {
+    NACIONAL:  { min: 0, max: 60   },
+    ESTADUAL:  { min: 0, max: 120  },
+    MUNICIPAL: { min: 0, max: 250  },
+  },
+  media_permanencia_sus: {
+    NACIONAL:  { min: 3, max: 8    },    // dias
+    ESTADUAL:  { min: 2, max: 12   },
+    MUNICIPAL: { min: 0, max: 20   },
+  },
+  // Censo Escolar INEP — Rendimento (%)
+  taxa_aprovacao_ef: {
+    NACIONAL:  { min: 70, max: 100 },
+    ESTADUAL:  { min: 60, max: 100 },
+    MUNICIPAL: { min: 50, max: 100 },
+  },
+  taxa_reprovacao_ef: {
+    NACIONAL:  { min: 0, max: 20   },
+    ESTADUAL:  { min: 0, max: 25   },
+    MUNICIPAL: { min: 0, max: 35   },
+  },
+  taxa_abandono_ef: {
+    NACIONAL:  { min: 0, max: 10   },
+    ESTADUAL:  { min: 0, max: 15   },
+    MUNICIPAL: { min: 0, max: 30   },
+  },
+  taxa_aprovacao_em: {
+    NACIONAL:  { min: 65, max: 100 },
+    ESTADUAL:  { min: 55, max: 100 },
+    MUNICIPAL: { min: 40, max: 100 },
+  },
+  taxa_abandono_em: {
+    NACIONAL:  { min: 0, max: 15   },
+    ESTADUAL:  { min: 0, max: 25   },
+    MUNICIPAL: { min: 0, max: 40   },
+  },
+  distorcao_idade_serie_ef: {
+    NACIONAL:  { min: 0, max: 40   },
+    ESTADUAL:  { min: 0, max: 60   },
+    MUNICIPAL: { min: 0, max: 80   },
+  },
+  distorcao_idade_serie_em: {
+    NACIONAL:  { min: 0, max: 30   },
+    ESTADUAL:  { min: 0, max: 50   },
+    MUNICIPAL: { min: 0, max: 70   },
+  },
+  // SENATRAN — Frota Veicular (/1k hab.)
+  frota_automovel_por_1k: {
+    NACIONAL:  { min: 50,  max: 400  },
+    ESTADUAL:  { min: 20,  max: 600  },
+    MUNICIPAL: { min: 0,   max: 900  },
+  },
+  frota_moto_por_1k: {
+    NACIONAL:  { min: 30,  max: 350  },
+    ESTADUAL:  { min: 10,  max: 500  },
+    MUNICIPAL: { min: 0,   max: 800  },
+  },
+  frota_caminhao_por_1k: {
+    NACIONAL:  { min: 0, max: 35   },
+    ESTADUAL:  { min: 0, max: 60   },
+    MUNICIPAL: { min: 0, max: 120  },
+  },
+  frota_onibus_por_1k: {
+    NACIONAL:  { min: 0, max: 15   },
+    ESTADUAL:  { min: 0, max: 25   },
+    MUNICIPAL: { min: 0, max: 50   },
+  },
+  frota_total_por_1k: {
+    NACIONAL:  { min: 80,  max: 900  },
+    ESTADUAL:  { min: 50,  max: 1200 },
+    MUNICIPAL: { min: 0,   max: 2000 },
+  },
 };
 
 // Escalas por capítulo CID-10 (taxas /100k bem menores que mortalidade geral ~700/100k)

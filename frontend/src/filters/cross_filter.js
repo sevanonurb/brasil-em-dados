@@ -99,6 +99,58 @@ export const ANOS_POR_METRICA_DEFAULT = {
   // Registro Civil — Nupcialidade e Divorcialidade (anual)
   taxa_nupcialidade:           [2024, 2023, 2022, 2021, 2020, 2019, 2018],
   taxa_divorcialidade:         [2024, 2023, 2022, 2021, 2020, 2019, 2018],
+  // Registro Civil — Separações e Óbitos Fetais (anual)
+  taxa_separacao:              [2024, 2023, 2022, 2021, 2020, 2019, 2018],
+  taxa_obito_fetal:            [2023, 2022, 2021, 2020, 2019, 2018],
+  // Censo 2022 — Equipamentos Domésticos (estático)
+  pct_geladeira:               [2022],
+  pct_ar_condicionado:         [2022],
+  pct_freezer:                 [2022],
+  pct_tv:                      [2022],
+  pct_automovel_domicilio:     [2022],
+  pct_motocicleta_domicilio:   [2022],
+  pct_microondas:              [2022],
+  pct_computador:              [2022],
+  // PPM — Rebanhos (anual)
+  rebanho_bovino_por_km2:      [2023, 2022, 2021, 2020, 2019],
+  rebanho_bovino_por_hab:      [2023, 2022, 2021, 2020, 2019],
+  rebanho_equino_por_hab:      [2023, 2022, 2021, 2020, 2019],
+  rebanho_suino_por_hab:       [2023, 2022, 2021, 2020, 2019],
+  rebanho_ovino_por_hab:       [2023, 2022, 2021, 2020, 2019],
+  rebanho_caprino_por_hab:     [2023, 2022, 2021, 2020, 2019],
+  rebanho_galinaceos_por_hab:  [2023, 2022, 2021, 2020, 2019],
+  // PPM — Produção Pecuária (anual)
+  producao_leite_por_vaca:     [2023, 2022, 2021, 2020, 2019],
+  producao_leite_per_capita:   [2023, 2022, 2021, 2020, 2019],
+  producao_mel_por_colmeia:    [2023, 2022, 2021, 2020, 2019],
+  producao_mel_kg:             [2023, 2022, 2021, 2020, 2019],
+  producao_ovos_total:         [2023, 2022, 2021, 2020, 2019],
+  producao_ovos_per_capita:    [2023, 2022, 2021, 2020, 2019],
+  // Epidemiologia — SINAN (anual)
+  incidencia_dengue:           [2023, 2022, 2021, 2020, 2019],
+  incidencia_tuberculose:      [2023, 2022, 2021, 2020, 2019],
+  incidencia_hanseniase:       [2023, 2022, 2021, 2020, 2019],
+  incidencia_leishmaniose:     [2023, 2022, 2021, 2020, 2019],
+  // Internações SUS — SIH (anual)
+  taxa_internacao_sus:         [2023, 2022, 2021, 2020, 2019],
+  taxa_internacao_cardiovascular: [2023, 2022, 2021, 2020, 2019],
+  taxa_internacao_respiratoria:   [2023, 2022, 2021, 2020, 2019],
+  taxa_internacao_mental:         [2023, 2022, 2021, 2020, 2019],
+  media_permanencia_sus:          [2023, 2022, 2021, 2020, 2019],
+  // Censo Escolar — INEP (anual)
+  taxa_aprovacao_ef:           [2024, 2023, 2022, 2021, 2020],
+  taxa_reprovacao_ef:          [2024, 2023, 2022, 2021, 2020],
+  taxa_abandono_ef:            [2024, 2023, 2022, 2021, 2020],
+  taxa_aprovacao_em:           [2024, 2023, 2022, 2021, 2020],
+  taxa_abandono_em:            [2024, 2023, 2022, 2021, 2020],
+  distorcao_idade_serie_ef:    [2024, 2023, 2022, 2021, 2020],
+  distorcao_idade_serie_em:    [2024, 2023, 2022, 2021, 2020],
+  // Transporte — SENATRAN (anual)
+  frota_automovel_por_1k:      [2024, 2023, 2022, 2021, 2020],
+  frota_moto_por_1k:           [2024, 2023, 2022, 2021, 2020],
+  frota_caminhao_por_1k:       [2024, 2023, 2022, 2021, 2020],
+  frota_onibus_por_1k:         [2024, 2023, 2022, 2021, 2020],
+  frota_total_por_1k:          [2024, 2023, 2022, 2021, 2020],
 };
 
 // Re-exporta para compatibilidade com imports existentes

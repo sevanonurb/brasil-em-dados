@@ -233,6 +233,58 @@ def query_anos():
         # Registro Civil — Nupcialidade e Divorcialidade (anual)
         "taxa_nupcialidade":           anos_metricas.get("taxa_nupcialidade",   [2024, 2023, 2022]),
         "taxa_divorcialidade":         anos_metricas.get("taxa_divorcialidade", [2024, 2023, 2022]),
+        # Registro Civil — Separações e Óbitos Fetais (anual)
+        "taxa_separacao":              anos_metricas.get("taxa_separacao",      [2024, 2023, 2022]),
+        "taxa_obito_fetal":            anos_metricas.get("taxa_obito_fetal",    [2023, 2022, 2021]),
+        # Equipamentos Domésticos — Censo 2022 (estático)
+        "pct_geladeira":               [2022],
+        "pct_ar_condicionado":         [2022],
+        "pct_freezer":                 [2022],
+        "pct_tv":                      [2022],
+        "pct_automovel_domicilio":     [2022],
+        "pct_motocicleta_domicilio":   [2022],
+        "pct_microondas":              [2022],
+        "pct_computador":              [2022],
+        # PPM — Rebanhos (anual)
+        "rebanho_bovino_por_km2":      anos_metricas.get("rebanho_bovino_por_km2",     [2023, 2022, 2021]),
+        "rebanho_bovino_por_hab":      anos_metricas.get("rebanho_bovino_por_hab",     [2023, 2022, 2021]),
+        "rebanho_equino_por_hab":      anos_metricas.get("rebanho_equino_por_hab",     [2023, 2022, 2021]),
+        "rebanho_suino_por_hab":       anos_metricas.get("rebanho_suino_por_hab",      [2023, 2022, 2021]),
+        "rebanho_ovino_por_hab":       anos_metricas.get("rebanho_ovino_por_hab",      [2023, 2022, 2021]),
+        "rebanho_caprino_por_hab":     anos_metricas.get("rebanho_caprino_por_hab",    [2023, 2022, 2021]),
+        "rebanho_galinaceos_por_hab":  anos_metricas.get("rebanho_galinaceos_por_hab", [2023, 2022, 2021]),
+        # PPM — Produção Pecuária (anual)
+        "producao_leite_por_vaca":     anos_metricas.get("producao_leite_por_vaca",    [2023, 2022, 2021]),
+        "producao_leite_per_capita":   anos_metricas.get("producao_leite_per_capita",  [2023, 2022, 2021]),
+        "producao_mel_por_colmeia":    anos_metricas.get("producao_mel_por_colmeia",   [2023, 2022, 2021]),
+        "producao_mel_kg":             anos_metricas.get("producao_mel_kg",            [2023, 2022, 2021]),
+        "producao_ovos_total":         anos_metricas.get("producao_ovos_total",        [2023, 2022, 2021]),
+        "producao_ovos_per_capita":    anos_metricas.get("producao_ovos_per_capita",   [2023, 2022, 2021]),
+        # SINAN — Epidemiologia (anual)
+        "incidencia_dengue":           anos_metricas.get("incidencia_dengue",          [2023, 2022, 2021]),
+        "incidencia_tuberculose":      anos_metricas.get("incidencia_tuberculose",     [2023, 2022, 2021]),
+        "incidencia_hanseniase":       anos_metricas.get("incidencia_hanseniase",      [2023, 2022, 2021]),
+        "incidencia_leishmaniose":     anos_metricas.get("incidencia_leishmaniose",    [2023, 2022, 2021]),
+        # SIH — Internações SUS (anual)
+        "taxa_internacao_sus":              anos_metricas.get("taxa_internacao_sus",              [2023, 2022, 2021]),
+        "taxa_internacao_cardiovascular":   anos_metricas.get("taxa_internacao_cardiovascular",   [2023, 2022, 2021]),
+        "taxa_internacao_respiratoria":     anos_metricas.get("taxa_internacao_respiratoria",     [2023, 2022, 2021]),
+        "taxa_internacao_mental":           anos_metricas.get("taxa_internacao_mental",           [2023, 2022, 2021]),
+        "media_permanencia_sus":            anos_metricas.get("media_permanencia_sus",            [2023, 2022, 2021]),
+        # Censo Escolar INEP — Rendimento (anual)
+        "taxa_aprovacao_ef":           anos_metricas.get("taxa_aprovacao_ef",          [2024, 2023, 2022]),
+        "taxa_reprovacao_ef":          anos_metricas.get("taxa_reprovacao_ef",         [2024, 2023, 2022]),
+        "taxa_abandono_ef":            anos_metricas.get("taxa_abandono_ef",           [2024, 2023, 2022]),
+        "taxa_aprovacao_em":           anos_metricas.get("taxa_aprovacao_em",          [2024, 2023, 2022]),
+        "taxa_abandono_em":            anos_metricas.get("taxa_abandono_em",           [2024, 2023, 2022]),
+        "distorcao_idade_serie_ef":    anos_metricas.get("distorcao_idade_serie_ef",   [2024, 2023, 2022]),
+        "distorcao_idade_serie_em":    anos_metricas.get("distorcao_idade_serie_em",   [2024, 2023, 2022]),
+        # SENATRAN — Frota Veicular (anual)
+        "frota_automovel_por_1k":      anos_metricas.get("frota_automovel_por_1k",    [2024, 2023, 2022]),
+        "frota_moto_por_1k":           anos_metricas.get("frota_moto_por_1k",         [2024, 2023, 2022]),
+        "frota_caminhao_por_1k":       anos_metricas.get("frota_caminhao_por_1k",     [2024, 2023, 2022]),
+        "frota_onibus_por_1k":         anos_metricas.get("frota_onibus_por_1k",       [2024, 2023, 2022]),
+        "frota_total_por_1k":          anos_metricas.get("frota_total_por_1k",        [2024, 2023, 2022]),
     }
 
 

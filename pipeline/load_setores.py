@@ -178,6 +178,23 @@ def load_uf(sigla: str, limpar: bool = False) -> dict:
 
         log.info("[%s] %d setores inseridos", sigla, inserted)
 
+        # Pré-projeta geom para EPSG:3857 e gera versão simplificada (~30m),
+        # usadas pelas tile functions para bbox-filter e rendering em zoom 9-12.
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE geo.setores_censitarios
+                SET
+                    geom_3857            = ST_Transform(geom, 3857),
+                    geom_3857_simplified = ST_Simplify(ST_Transform(geom, 3857), 30)
+                WHERE cod_uf = %s
+                  AND geom_3857 IS NULL
+                """,
+                (cod_uf,),
+            )
+            conn.commit()
+        log.info("[%s] geom_3857 e geom_3857_simplified preenchidos", sigla)
+
         # Gera setores_subdivididos via PostGIS (ST_Subdivide max 64 vértices)
         with conn.cursor() as cur:
             cur.execute(
@@ -221,6 +238,14 @@ def build_spatial_indexes(conn):
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_setores_cod_setor "
             "ON geo.setores_censitarios (cod_setor)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_setores_geom_3857 "
+            "ON geo.setores_censitarios USING GIST (geom_3857)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_setores_geom_3857_simplified "
+            "ON geo.setores_censitarios USING GIST (geom_3857_simplified)"
         )
         log.info("Criando índices em geo.setores_subdivididos...")
         cur.execute(
