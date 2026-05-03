@@ -288,6 +288,38 @@ def query_anos():
     }
 
 
+_municipios_cache: list | None = None
+
+
+def query_municipios() -> list:
+    """Retorna lista de municípios com nome, UF e centróide (lon, lat)."""
+    global _municipios_cache
+    if _municipios_cache is not None:
+        return _municipios_cache
+    conn = psycopg2.connect(**DB)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    m.cod_ibge_7,
+                    m.nome,
+                    u.sigla,
+                    ROUND(ST_X(ST_Centroid(m.geom))::NUMERIC, 5) AS lon,
+                    ROUND(ST_Y(ST_Centroid(m.geom))::NUMERIC, 5) AS lat
+                FROM geo.municipios m
+                JOIN geo.ufs u ON u.cod_uf = m.cod_uf
+                ORDER BY m.nome
+            """)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    _municipios_cache = [
+        {"cod": r[0], "nome": r[1], "uf": r[2], "lon": float(r[3]), "lat": float(r[4])}
+        for r in rows
+    ]
+    return _municipios_cache
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/anos", "/anos/"):
@@ -298,6 +330,22 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as exc:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(exc)}).encode())
+        elif self.path in ("/municipios", "/municipios/"):
+            try:
+                data = query_municipios()
+                body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 self.wfile.write(body)
             except Exception as exc:

@@ -44,6 +44,50 @@ const METRICAS_LABELS = {
   pct_banheiro_exclusivo:      "Moradores em domicílios com banheiro exclusivo (%)",
   taxa_nupcialidade:           "Taxa de nupcialidade (casamentos / 1000 hab.)",
   taxa_divorcialidade:         "Taxa de divorcialidade (divórcios / 1000 hab.)",
+  taxa_separacao:              "Taxa de separação judicial (/1k hab.)",
+  taxa_obito_fetal:            "Taxa de óbito fetal (/1k nascidos vivos)",
+  incidencia_dengue:           "Dengue — incidência (/100k hab.)",
+  incidencia_tuberculose:      "Tuberculose — incidência (/100k hab.)",
+  incidencia_hanseniase:       "Hanseníase — incidência (/100k hab.)",
+  incidencia_leishmaniose:     "Leishmaniose visceral — incidência (/100k hab.)",
+  taxa_internacao_sus:         "Internações SUS (/1k hab.)",
+  taxa_internacao_cardiovascular: "Internações cardiovasculares (/100k hab.)",
+  taxa_internacao_respiratoria:   "Internações respiratórias (/100k hab.)",
+  taxa_internacao_mental:         "Internações saúde mental (/100k hab.)",
+  media_permanencia_sus:       "Média de permanência hospitalar (dias)",
+  taxa_aprovacao_ef:           "Aprovação — Ens. Fundamental (%)",
+  taxa_reprovacao_ef:          "Reprovação — Ens. Fundamental (%)",
+  taxa_abandono_ef:            "Abandono — Ens. Fundamental (%)",
+  taxa_aprovacao_em:           "Aprovação — Ens. Médio (%)",
+  taxa_abandono_em:            "Abandono — Ens. Médio (%)",
+  distorcao_idade_serie_ef:    "Distorção idade-série — Ens. Fundamental (%)",
+  distorcao_idade_serie_em:    "Distorção idade-série — Ens. Médio (%)",
+  frota_automovel_por_1k:      "Automóveis (/1k hab.)",
+  frota_moto_por_1k:           "Motocicletas (/1k hab.)",
+  frota_caminhao_por_1k:       "Caminhões (/1k hab.)",
+  frota_onibus_por_1k:         "Ônibus (/1k hab.)",
+  frota_total_por_1k:          "Frota total (/1k hab.)",
+  rebanho_bovino_por_km2:      "Rebanho bovino (cab./km²)",
+  rebanho_bovino_por_hab:      "Rebanho bovino (cab./hab.)",
+  rebanho_suino_por_hab:       "Rebanho suíno (cab./hab.)",
+  rebanho_ovino_por_hab:       "Rebanho ovino (cab./hab.)",
+  rebanho_caprino_por_hab:     "Rebanho caprino (cab./hab.)",
+  rebanho_galinaceos_por_hab:  "Galináceos (cab./hab.)",
+  rebanho_equino_por_hab:      "Equinos (cab./hab.)",
+  producao_leite_por_vaca:     "Produção de leite por vaca (L/vaca)",
+  producao_leite_per_capita:   "Produção de leite per capita (L/hab.)",
+  producao_mel_por_colmeia:    "Produção de mel por colmeia (kg/colmeia)",
+  producao_mel_kg:             "Produção de mel — total (kg)",
+  producao_ovos_total:         "Produção de ovos — total (mil dúzias)",
+  producao_ovos_per_capita:    "Produção de ovos per capita (dúzias/hab.)",
+  pct_geladeira:               "Domicílios com geladeira (%)",
+  pct_ar_condicionado:         "Domicílios com ar-condicionado (%)",
+  pct_freezer:                 "Domicílios com freezer (%)",
+  pct_tv:                      "Domicílios com televisão (%)",
+  pct_automovel_domicilio:     "Domicílios com automóvel (%)",
+  pct_motocicleta_domicilio:   "Domicílios com motocicleta (%)",
+  pct_microondas:              "Domicílios com microondas (%)",
+  pct_computador:              "Domicílios com computador (%)",
   domicilios_alugados:         "Domicílios alugados (%)",
   domicilios_monoparentais:    "Domicílios monoparentais — sem cônjuge com filhos (%)",
   pct_chefia_feminina:         "Domicílios com responsável mulher (%)",
@@ -93,6 +137,12 @@ const METRICAS_PERCENT = new Set([
   "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
   "domicilios_alugados", "domicilios_monoparentais",
   "pct_urbano", "pct_alvenaria", "pct_banheiro_exclusivo",
+  "taxa_aprovacao_ef", "taxa_aprovacao_em",
+  "pct_geladeira", "pct_ar_condicionado", "pct_freezer", "pct_tv",
+  "pct_automovel_domicilio", "pct_motocicleta_domicilio",
+  "pct_microondas", "pct_computador",
+  "taxa_reprovacao_ef", "taxa_abandono_ef", "taxa_abandono_em",
+  "distorcao_idade_serie_ef", "distorcao_idade_serie_em",
 ]);
 
 function formatarValor(v, metrica) {
@@ -107,11 +157,17 @@ function formatarValor(v, metrica) {
   if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
-  if (metrica === "leitos_sus_por_1k") {
-    return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  if (metrica === "leitos_sus_por_1k" || metrica === "media_permanencia_sus") {
+    return n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   }
   if (metrica === "media_moradores" || metrica === "media_anos_estudo" || metrica === "idade_mediana") {
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+  if (metrica.startsWith("rebanho_")) {
+    return n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+  }
+  if (metrica.startsWith("producao_") || metrica === "producao_mel_kg") {
+    return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
   }
   return n.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
@@ -133,6 +189,15 @@ const METRICAS_MELHOR_ALTO = new Set([
   "pct_chefia_feminina", "domicilios_maquina_lavar",
   "domicilios_alugados", "domicilios_monoparentais",
   "pct_alvenaria", "pct_banheiro_exclusivo",
+  "leitos_sus_por_1k", "medicos_por_10k", "taxa_internacao_sus",
+  "producao_leite_por_vaca", "producao_leite_per_capita",
+  "producao_mel_por_colmeia", "producao_mel_kg",
+  "producao_ovos_total", "producao_ovos_per_capita",
+  "frota_automovel_por_1k", "frota_moto_por_1k",
+  "frota_caminhao_por_1k", "frota_onibus_por_1k", "frota_total_por_1k",
+  "rebanho_bovino_por_km2", "rebanho_bovino_por_hab",
+  "rebanho_suino_por_hab", "rebanho_ovino_por_hab",
+  "rebanho_caprino_por_hab", "rebanho_galinaceos_por_hab", "rebanho_equino_por_hab",
 ]);
 
 export function Legenda({ metrica, min, max, semDados = false }) {

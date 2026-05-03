@@ -9,7 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import maplibregl from "maplibre-gl";
-import { Deck } from "@deck.gl/core";
+import { Deck, FlyToInterpolator } from "@deck.gl/core";
 import { MVTLayer } from "@deck.gl/geo-layers";
 import { Protocol } from "pmtiles";
 
@@ -23,6 +23,7 @@ import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { Legenda } from "./components/Legenda.jsx";
+import { BuscaMunicipio } from "./components/BuscaMunicipio.jsx";
 
 // Registra protocolo PMTiles no MapLibre
 const pmtilesProtocol = new Protocol();
@@ -700,8 +701,52 @@ function makeTooltip(metrica, cid10) {
     pct_urbano:                  "Pop. urbana",
     pct_alvenaria:               "Alvenaria",
     pct_banheiro_exclusivo:      "Banheiro exclusivo",
-    taxa_nupcialidade:           "Nupcialidade",
-    taxa_divorcialidade:         "Divorcialidade",
+    taxa_nupcialidade:              "Nupcialidade",
+    taxa_divorcialidade:            "Divorcialidade",
+    taxa_separacao:                 "Separação judicial",
+    taxa_obito_fetal:               "Óbito fetal",
+    incidencia_dengue:              "Dengue",
+    incidencia_tuberculose:         "Tuberculose",
+    incidencia_hanseniase:          "Hanseníase",
+    incidencia_leishmaniose:        "Leishmaniose",
+    taxa_internacao_sus:            "Internações SUS",
+    taxa_internacao_cardiovascular: "Internações cardiovasc.",
+    taxa_internacao_respiratoria:   "Internações respirat.",
+    taxa_internacao_mental:         "Internações mental",
+    media_permanencia_sus:          "Permanência hosp.",
+    taxa_aprovacao_ef:              "Aprovação EF",
+    taxa_reprovacao_ef:             "Reprovação EF",
+    taxa_abandono_ef:               "Abandono EF",
+    taxa_aprovacao_em:              "Aprovação EM",
+    taxa_abandono_em:               "Abandono EM",
+    distorcao_idade_serie_ef:       "Distorção EF",
+    distorcao_idade_serie_em:       "Distorção EM",
+    frota_automovel_por_1k:         "Automóveis",
+    frota_moto_por_1k:              "Motocicletas",
+    frota_caminhao_por_1k:          "Caminhões",
+    frota_onibus_por_1k:            "Ônibus",
+    frota_total_por_1k:             "Frota total",
+    rebanho_bovino_por_km2:         "Bovino/km²",
+    rebanho_bovino_por_hab:         "Bovino/hab.",
+    rebanho_suino_por_hab:          "Suíno/hab.",
+    rebanho_ovino_por_hab:          "Ovino/hab.",
+    rebanho_caprino_por_hab:        "Caprino/hab.",
+    rebanho_galinaceos_por_hab:     "Galináceos/hab.",
+    rebanho_equino_por_hab:         "Equino/hab.",
+    producao_leite_por_vaca:        "Leite/vaca",
+    producao_leite_per_capita:      "Leite per capita",
+    producao_mel_por_colmeia:       "Mel/colmeia",
+    producao_mel_kg:                "Mel (kg)",
+    producao_ovos_total:            "Ovos (mil dúzias)",
+    producao_ovos_per_capita:       "Ovos/hab.",
+    pct_geladeira:                  "Geladeira",
+    pct_ar_condicionado:            "Ar-condicionado",
+    pct_freezer:                    "Freezer",
+    pct_tv:                         "Televisão",
+    pct_automovel_domicilio:        "Automóvel (domicílio)",
+    pct_motocicleta_domicilio:      "Motocicleta (domicílio)",
+    pct_microondas:                 "Microondas",
+    pct_computador:                 "Computador",
   };
 
   const METRICAS_REAIS = new Set([
@@ -727,6 +772,12 @@ function makeTooltip(metrica, cid10) {
     "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
     "domicilios_alugados", "domicilios_monoparentais",
     "pct_urbano", "pct_alvenaria", "pct_banheiro_exclusivo",
+    "taxa_aprovacao_ef", "taxa_reprovacao_ef", "taxa_abandono_ef",
+    "taxa_aprovacao_em", "taxa_abandono_em",
+    "distorcao_idade_serie_ef", "distorcao_idade_serie_em",
+    "pct_geladeira", "pct_ar_condicionado", "pct_freezer", "pct_tv",
+    "pct_automovel_domicilio", "pct_motocicleta_domicilio",
+    "pct_microondas", "pct_computador",
   ]);
 
   return ({ object }) => {
@@ -757,8 +808,35 @@ function makeTooltip(metrica, cid10) {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
       } else if (metrica === "mortalidade_infantil") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc.`;
-      } else if (metrica === "taxa_natalidade" || metrica === "taxa_nupcialidade" || metrica === "taxa_divorcialidade") {
+      } else if (["taxa_natalidade", "taxa_nupcialidade", "taxa_divorcialidade",
+                   "taxa_separacao", "taxa_internacao_sus",
+                   "frota_automovel_por_1k", "frota_moto_por_1k", "frota_caminhao_por_1k",
+                   "frota_onibus_por_1k", "frota_total_por_1k"].includes(metrica)) {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
+      } else if (["incidencia_dengue", "incidencia_tuberculose", "incidencia_hanseniase",
+                  "incidencia_leishmaniose", "taxa_internacao_cardiovascular",
+                  "taxa_internacao_respiratoria", "taxa_internacao_mental"].includes(metrica)) {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k hab.`;
+      } else if (metrica === "taxa_obito_fetal") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc. vivos`;
+      } else if (metrica === "media_permanencia_sus") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> dias`;
+      } else if (metrica === "producao_leite_por_vaca") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> L/vaca`;
+      } else if (metrica === "producao_leite_per_capita") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> L/hab.`;
+      } else if (metrica === "producao_mel_por_colmeia") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> kg/colmeia`;
+      } else if (metrica === "producao_mel_kg") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> kg`;
+      } else if (metrica === "producao_ovos_total") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> mil dúz.`;
+      } else if (metrica === "producao_ovos_per_capita") {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b> dúz./hab.`;
+      } else if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_km2")) {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b> cab/km²`;
+      } else if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_hab")) {
+        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</b> cab/hab.`;
       } else if (metrica === "razao_sexo") {
         formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> h/100 mul.`;
       } else if (metrica === "media_moradores") {
@@ -826,6 +904,7 @@ export default function App() {
   const [viewState, setViewState] = useState(INITIAL_VIEW);
   const [featureSelecionada, setFeatureSelecionada] = useState(null);
   const [estatisticas, setEstatisticas] = useState({ min: 0, max: 100 });
+  const [flyTarget, setFlyTarget] = useState(null);
 
   const filtros = useFiltrosStore();
   useAnosDisponiveis(); // busca anos disponíveis do banco na inicialização
@@ -855,6 +934,19 @@ export default function App() {
     const range = ranges[level] ?? ranges.ESTADUAL;
     setEstatisticas(range);
   }, [filtros.metrica, nivelAtual, filtros.cid10_capitulo]);
+
+  // Animação de flyTo quando flyTarget muda
+  useEffect(() => {
+    if (!flyTarget || !deckRef.current) return;
+    deckRef.current.setProps({
+      initialViewState: {
+        ...flyTarget,
+        transitionDuration: 1400,
+        transitionInterpolator: new FlyToInterpolator({ speed: 1.8 }),
+      },
+    });
+    setFlyTarget(null);
+  }, [flyTarget]);
 
   // Inicia MapLibre + Deck.gl uma única vez
   useEffect(() => {
@@ -1058,6 +1150,37 @@ export default function App() {
         id="deck-canvas"
         style={{ position: "absolute", inset: 0, pointerEvents: "all" }}
       />
+
+      {/* Barra de ferramentas superior — busca + navegação */}
+      <div style={{
+        position: "absolute",
+        top: 16,
+        left: "50%",
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        zIndex: 10,
+      }}>
+        <BuscaMunicipio onFlyTo={setFlyTarget} />
+        <button
+          title="Centralizar o Brasil"
+          onClick={() => setFlyTarget({ ...INITIAL_VIEW })}
+          style={{
+            background: "rgba(15,17,23,0.90)",
+            border: "1px solid #2d3748",
+            borderRadius: 8,
+            color: "#a0aec0",
+            cursor: "pointer",
+            fontSize: 16,
+            padding: "6px 10px",
+            lineHeight: 1,
+            transition: "border-color 0.15s, color 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "#4299e1"; e.currentTarget.style.color = "#e2e8f0"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "#2d3748"; e.currentTarget.style.color = "#a0aec0"; }}
+        >🏠</button>
+      </div>
 
       {/* Painel de controles */}
       <PainelControles
