@@ -22,6 +22,7 @@ import {
 import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
+import { PainelVisual } from "./components/PainelVisual.jsx";
 import { Legenda } from "./components/Legenda.jsx";
 import { BuscaMunicipio } from "./components/BuscaMunicipio.jsx";
 
@@ -994,6 +995,18 @@ export default function App() {
 
   // null = automático (segue o zoom); string = nível forçado pelo painel
   const [nivelForcado, setNivelForcado] = useState(null);
+
+  // Controles visuais — não afetam dados, apenas renderização
+  const [visual, setVisual] = useState({
+    opacidadeOverlay: 1.0,      // 0–1: opacidade das camadas coropléticas
+    bordurasMunicipios: true,   // mostrar bordas dos municípios
+    bordurasEstados: true,      // mostrar bordas dos estados/UFs
+    opacidadeBasemap: null,     // null = zoom-based automático; 0–1 = manual
+    mostrarSulAmerica: false,   // exibe basemap visível em todos os zooms
+  });
+  const updateVisual = useCallback((key, val) => {
+    setVisual(prev => ({ ...prev, [key]: val }));
+  }, []);
   const nivelAtual = nivelForcado ?? getNivelSemantico(viewState.zoom);
 
   const serverParams = filtros.getServerParams();
@@ -1017,6 +1030,37 @@ export default function App() {
     const range = ranges[level] ?? ranges.ESTADUAL;
     setEstatisticas(range);
   }, [filtros.metrica, nivelAtual, filtros.cid10_capitulo]);
+
+  // Atualiza opacidade do mapa base (MapLibre) ao mudar controles visuais.
+  // Separa em effect próprio para não depender do ciclo das camadas Deck.gl.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const apply = () => {
+      if (!map.getLayer("osm-tiles")) return;
+      const { opacidadeBasemap, mostrarSulAmerica } = visual;
+      let expr;
+      if (opacidadeBasemap !== null) {
+        // Controle manual: valor fixo ignorando o zoom
+        expr = opacidadeBasemap;
+      } else if (mostrarSulAmerica) {
+        // Modo Sul América: basemap visível mesmo em zooms baixos
+        expr = ["interpolate", ["linear"], ["zoom"], 2, 0.42, 6, 0.35, 10, 0.35, 14, 0.6];
+      } else {
+        // Auto: aparece gradualmente a partir do zoom 8 (comportamento padrão)
+        expr = ["interpolate", ["linear"], ["zoom"], 8, 0, 10, 0.35, 14, 0.6];
+      }
+      map.setPaintProperty("osm-tiles", "raster-opacity", expr);
+    };
+
+    if (map.getLayer("osm-tiles")) {
+      apply();
+    } else {
+      // Aguarda o estilo carregar antes de atualizar (apenas no primeiro render)
+      map.once("idle", apply);
+    }
+  }, [visual.opacidadeBasemap, visual.mostrarSulAmerica]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reseta a normalização adaptativa ao trocar contexto (métrica, ano, UF, nível)
   useEffect(() => {
@@ -1151,8 +1195,20 @@ export default function App() {
 
     const layers = [];
 
-    // Quando o nível é forçado manualmente, usa opacidade total (ignora fade por zoom)
-    const op = (zIn, zOut) => nivelForcado ? 1 : calcularOpacidade(viewState.zoom, zIn, zOut);
+    // Opacidade base: fade por zoom × opacidade do overlay (controle visual)
+    const op = (zIn, zOut) =>
+      (nivelForcado ? 1 : calcularOpacidade(viewState.zoom, zIn, zOut)) * visual.opacidadeOverlay;
+
+    // Cores de borda controladas pelo painel visual
+    const munLineColor   = visual.bordurasMunicipios ? [20, 20, 20, 150]    : [0, 0, 0, 0];
+    const munLineWidth   = visual.bordurasMunicipios ? 0.5  : 0;
+    const munLineMinPx   = visual.bordurasMunicipios ? 0.3  : 0;
+    const setorLineColor = visual.bordurasMunicipios ? [20, 20, 20, 120]    : [0, 0, 0, 0];
+    const setorLineWidth = visual.bordurasMunicipios ? 0.3  : 0;
+    const setorLineMinPx = visual.bordurasMunicipios ? 0.2  : 0;
+    const ufLineColor    = visual.bordurasEstados    ? [60, 60, 80, 200]    : [0, 0, 0, 0];
+    const ufLineWidth    = visual.bordurasEstados    ? 1    : 0;
+    const ufLineMinPx    = visual.bordurasEstados    ? 0.8  : 0;
 
     // Determina se a escala deve ser invertida (alto=bom → verde no topo)
     const metricaInvertida = METRICAS_INVERTIDAS.has(filtros.metrica);
@@ -1194,11 +1250,14 @@ export default function App() {
           if (!isFinite(val)) return [55, 60, 75, 160];
           return getCorCoroplética(resolverT(val), 220, metricaInvertida);
         },
-        getLineColor: [60, 60, 80, 200],
-        getLineWidth: 1,
-        lineWidthMinPixels: 0.8,
+        getLineColor: ufLineColor,
+        getLineWidth: ufLineWidth,
+        lineWidthMinPixels: ufLineMinPx,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: {
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
+          getLineColor: [visual.bordurasEstados],
+        },
       }));
     }
 
@@ -1210,9 +1269,9 @@ export default function App() {
           opacity: 1,
           pickable: false,
           getFillColor: [60, 70, 95, 160],
-          getLineColor: [100, 115, 145, 180],
-          getLineWidth: 1,
-          lineWidthMinPixels: 0.8,
+          getLineColor: visual.bordurasEstados ? [100, 115, 145, 180] : [0, 0, 0, 0],
+          getLineWidth: ufLineWidth,
+          lineWidthMinPixels: ufLineMinPx,
         }));
       }
 
@@ -1231,11 +1290,14 @@ export default function App() {
           if (!isFinite(val)) return [55, 60, 75, 160];
           return getCorCoroplética(resolverT(val), 220, metricaInvertida);
         },
-        getLineColor: [20, 20, 20, 150],
-        getLineWidth: 0.5,
-        lineWidthMinPixels: 0.3,
+        getLineColor: munLineColor,
+        getLineWidth: munLineWidth,
+        lineWidthMinPixels: munLineMinPx,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: {
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
+          getLineColor: [visual.bordurasMunicipios],
+        },
       }));
     }
 
@@ -1250,12 +1312,15 @@ export default function App() {
         highlightColor: [255, 255, 255, 60],
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
-        getLineColor: [20, 20, 20, 120],
-        getLineWidth: 0.3,
-        lineWidthMinPixels: 0.2,
+        getLineColor: setorLineColor,
+        getLineWidth: setorLineWidth,
+        lineWidthMinPixels: setorLineMinPx,
         pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: {
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
+          getLineColor: [visual.bordurasMunicipios],
+        },
       }));
     }
 
@@ -1276,7 +1341,7 @@ export default function App() {
       layers,
       getTooltip: makeTooltip(filtros.metrica, filtros.cid10_capitulo),
     });
-  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, handleTileLoad]);
+  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, normSorted, visual, handleTileLoad]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -1319,6 +1384,19 @@ export default function App() {
           onMouseLeave={e => { e.currentTarget.style.borderColor = "#2d3748"; e.currentTarget.style.color = "#a0aec0"; }}
         >🏠</button>
       </div>
+
+      {/* Painel visual — controles de renderização */}
+      <PainelVisual
+        visual={visual}
+        onUpdate={updateVisual}
+        onFlyTo={(destino) => {
+          if (destino === "brasil") {
+            setFlyTarget({ ...INITIAL_VIEW, transitionDuration: 1200 });
+          } else if (destino === "sul_america") {
+            setFlyTarget({ latitude: -17, longitude: -57, zoom: 2.5, pitch: 0, bearing: 0, transitionDuration: 1500 });
+          }
+        }}
+      />
 
       {/* Painel de controles */}
       <PainelControles
