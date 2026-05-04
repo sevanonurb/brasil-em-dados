@@ -625,6 +625,37 @@ const CID10_RANGES = {
 
 const METRICAS_SEM_DADOS = [];
 
+// Métricas onde ALTO = BOM → escala invertida (vermelho=baixo/ruim, verde=alto/bom)
+const METRICAS_INVERTIDAS = new Set([
+  // Saneamento básico
+  "acesso_agua", "acesso_esgoto", "coleta_lixo",
+  // Saúde — oferta de recursos
+  "medicos_por_10k", "leitos_sus_por_1k",
+  // Educação — qualidade e desempenho
+  "ideb_anos_iniciais", "ideb_anos_finais",
+  "taxa_alfabetizacao", "media_anos_estudo", "pct_superior_completo",
+  "taxa_escolarizacao_1517",
+  "taxa_aprovacao_ef", "taxa_aprovacao_em",
+  // Renda e produto econômico
+  "pib_per_capita", "receita_per_capita",
+  "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
+  "renda_media_trabalho", "renda_mediana_trabalho",
+  // Gasto público — investimento social
+  "despesa_saude_per_capita", "despesa_educacao_per_capita",
+  // Mercado de trabalho formal
+  "taxa_ocupacao", "pct_renda_trabalho",
+  // Infraestrutura digital
+  "domicilios_internet",
+  // Habitação — qualidade construtiva
+  "pct_alvenaria", "pct_banheiro_exclusivo",
+  // Acesso a bens essenciais
+  "pct_geladeira", "pct_computador", "domicilios_maquina_lavar",
+  // Agropecuária — desenvolvimento tecnológico
+  "pct_mecanizado", "pct_financiamento", "pct_agrofamiliar",
+  // Atividade econômica formal
+  "empresas_por_1k",
+]);
+
 // Busca os anos disponíveis no banco via API e atualiza o store
 function useAnosDisponiveis() {
   const setAnosDisponiveis = useFiltrosStore(s => s.setAnosDisponiveis);
@@ -880,11 +911,25 @@ const INITIAL_VIEW = {
   bearing: 0,
 };
 
-function getCorCoroplética(valorNormalizado, opacity = 220) {
+/**
+ * Gera a cor coroplética para um valor normalizado [0,1].
+ * - Padrão (invertida=false): ciano → amarelo → vermelho  (baixo=neutro/bom, alto=ruim)
+ * - Invertida (invertida=true): vermelho → amarelo → verde (baixo=ruim, alto=bom)
+ */
+function getCorCoroplética(valorNormalizado, opacity = 220, invertida = false) {
   const t = Math.max(0, Math.min(1, valorNormalizado));
-  const r = Math.round(t < 0.5 ? t * 2 * 255 : 255);
-  const g = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
-  const b = Math.round(t < 0.5 ? 255 - t * 2 * 255 : 0);
+  let r, g, b;
+  if (invertida) {
+    // vermelho (baixo=ruim) → amarelo (meio) → verde (alto=bom)
+    r = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
+    g = Math.round(t < 0.5 ? t * 2 * 255 : 255);
+    b = 0;
+  } else {
+    // ciano (baixo) → amarelo (meio) → vermelho (alto=ruim)
+    r = Math.round(t < 0.5 ? t * 2 * 255 : 255);
+    g = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
+    b = Math.round(t < 0.5 ? 255 - t * 2 * 255 : 0);
+  }
   return [r, g, b, opacity];
 }
 
@@ -1032,13 +1077,16 @@ export default function App() {
     // Quando o nível é forçado manualmente, usa opacidade total (ignora fade por zoom)
     const op = (zIn, zOut) => nivelForcado ? 1 : calcularOpacidade(viewState.zoom, zIn, zOut);
 
+    // Determina se a escala deve ser invertida (alto=bom → verde no topo)
+    const metricaInvertida = METRICAS_INVERTIDAS.has(filtros.metrica);
+
     // Cor coroplética compartilhada por todas as camadas de fundo
     const getChoroplethColor = (f) => {
       const raw = f.properties?.valor_metrica;
       if (raw == null || raw === "") return [55, 60, 75, 160];
       const val = Number(raw);
       if (!isFinite(val)) return [55, 60, 75, 160];
-      return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+      return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
     };
 
 
@@ -1055,13 +1103,13 @@ export default function App() {
           if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
         },
         getLineColor: [60, 60, 80, 200],
         getLineWidth: 1,
         lineWidthMinPixels: 0.8,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1092,13 +1140,13 @@ export default function App() {
           if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max));
+          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
         },
         getLineColor: [20, 20, 20, 150],
         getLineWidth: 0.5,
         lineWidthMinPixels: 0.3,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1117,7 +1165,7 @@ export default function App() {
         lineWidthMinPixels: 0.2,
         pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey] },
+        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1203,6 +1251,7 @@ export default function App() {
         min={estatisticas.min}
         max={estatisticas.max}
         semDados={METRICAS_SEM_DADOS.includes(filtros.metrica)}
+        invertida={METRICAS_INVERTIDAS.has(filtros.metrica)}
       />
 
       {/* Painel de detalhes */}

@@ -173,39 +173,23 @@ function formatarValor(v, metrica) {
 }
 
 const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio", "mortalidade_infantil"]);
-const METRICAS_MELHOR_ALTO = new Set([
-  "acesso_agua", "acesso_esgoto", "coleta_lixo",
-  "taxa_natalidade", "leitos_sus_por_1k", "medicos_por_10k",
-  "ideb_anos_iniciais", "ideb_anos_finais",
-  "taxa_alfabetizacao", "domicilios_internet",
-  "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
-  "media_anos_estudo", "pct_superior_completo",
-  "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
-  "renda_media_trabalho", "renda_mediana_trabalho",
-  "taxa_ocupacao",
-  "pct_agrofamiliar", "pct_mecanizado", "pct_financiamento",
-  "empresas_por_1k", "taxa_escolarizacao_1517",
-  "pct_renda_trabalho",
-  "pct_chefia_feminina", "domicilios_maquina_lavar",
-  "domicilios_alugados", "domicilios_monoparentais",
-  "pct_alvenaria", "pct_banheiro_exclusivo",
-  "leitos_sus_por_1k", "medicos_por_10k", "taxa_internacao_sus",
-  "producao_leite_por_vaca", "producao_leite_per_capita",
-  "producao_mel_por_colmeia", "producao_mel_kg",
-  "producao_ovos_total", "producao_ovos_per_capita",
-  "frota_automovel_por_1k", "frota_moto_por_1k",
-  "frota_caminhao_por_1k", "frota_onibus_por_1k", "frota_total_por_1k",
-  "rebanho_bovino_por_km2", "rebanho_bovino_por_hab",
-  "rebanho_suino_por_hab", "rebanho_ovino_por_hab",
-  "rebanho_caprino_por_hab", "rebanho_galinaceos_por_hab", "rebanho_equino_por_hab",
-]);
 
-export function Legenda({ metrica, min, max, semDados = false }) {
+export function Legenda({ metrica, min, max, semDados = false, invertida = false }) {
   const label = METRICAS_LABELS[metrica] ?? metrica;
-  const legendaMeio = METRICAS_SAUDE_SET.has(metrica) ? "↑ maior risco"
-    : metrica === "densidade_pop" ? "↑ mais denso"
-    : METRICAS_MELHOR_ALTO.has(metrica) ? "↑ melhor"
-    : "↑ maior valor";
+
+  // Rótulo central da legenda
+  const legendaMeio = invertida
+    ? "↑ melhor"
+    : METRICAS_SAUDE_SET.has(metrica)
+      ? "↑ maior risco"
+      : metrica === "densidade_pop"
+        ? "↑ mais denso"
+        : "↑ maior valor";
+
+  // Gradiente CSS espelha getCorCoroplética
+  const gradiente = invertida
+    ? "linear-gradient(to right, rgb(255,0,0), rgb(255,255,0), rgb(0,220,50))"   // vermelho→amarelo→verde
+    : "linear-gradient(to right, rgb(0,255,255), rgb(255,255,0), rgb(255,0,0))"; // ciano→amarelo→vermelho
 
   return (
     <div style={{
@@ -237,11 +221,10 @@ export function Legenda({ metrica, min, max, semDados = false }) {
         </div>
       ) : (
         <>
-          {/* Gradiente cyan→amarelo→vermelho (espelha getCorCoroplética) */}
           <div style={{
             height: 10,
             borderRadius: 4,
-            background: "linear-gradient(to right, rgb(0,255,255), rgb(255,255,0), rgb(255,0,0))",
+            background: gradiente,
             marginBottom: 4,
           }} />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#a0aec0" }}>
