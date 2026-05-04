@@ -940,6 +940,20 @@ function normalizarValor(v, min, max) {
   return Math.max(0, Math.min(1, (n - min) / (max - min)));
 }
 
+/**
+ * Computa os percentis P2 e P98 de um array de valores numéricos.
+ * Retorna null se houver dados insuficientes ou distribuição degenerada.
+ * Usado para normalização adaptativa que resiste a outliers.
+ */
+function computePercentileBounds(values, pLow = 0.02, pHigh = 0.98) {
+  if (values.length < 20) return null;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const lo = sorted[Math.floor(sorted.length * pLow)];
+  const hi = sorted[Math.min(Math.floor(sorted.length * pHigh), sorted.length - 1)];
+  if (!isFinite(lo) || !isFinite(hi) || lo >= hi) return null;
+  return { min: lo, max: hi };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const mapContainerRef = useRef(null);
@@ -950,6 +964,12 @@ export default function App() {
   const [featureSelecionada, setFeatureSelecionada] = useState(null);
   const [estatisticas, setEstatisticas] = useState({ min: 0, max: 100 });
   const [flyTarget, setFlyTarget] = useState(null);
+
+  // Normalização adaptativa: coleta valores dos tiles carregados e computa P2/P98
+  const [normBounds, setNormBounds] = useState(null); // null = usa METRICAS_RANGES como fallback
+  const valoresColetados = useRef([]);                 // valores acumulados dos tiles
+  const debounceTimer    = useRef(null);               // debounce para o cálculo de percentis
+  const boundsComputados = useRef(false);              // trava: calcula só uma vez por contexto
 
   const filtros = useFiltrosStore();
   useAnosDisponiveis(); // busca anos disponíveis do banco na inicialização
@@ -979,6 +999,37 @@ export default function App() {
     const range = ranges[level] ?? ranges.ESTADUAL;
     setEstatisticas(range);
   }, [filtros.metrica, nivelAtual, filtros.cid10_capitulo]);
+
+  // Reseta a normalização adaptativa ao trocar contexto (métrica, ano, UF, nível)
+  useEffect(() => {
+    setNormBounds(null);
+    valoresColetados.current = [];
+    boundsComputados.current = false;
+    clearTimeout(debounceTimer.current);
+  }, [tileUrlKey, nivelAtual]);
+
+  // Callback estável: acumula valores dos tiles e computa P2/P98 uma vez por contexto
+  const handleTileLoad = useCallback((tile) => {
+    if (boundsComputados.current) return; // já calculou para este contexto
+    const features = tile.data;
+    if (!Array.isArray(features)) return;
+    for (const f of features) {
+      const v = f.properties?.valor_metrica;
+      if (v != null && v !== "") {
+        const n = Number(v);
+        if (isFinite(n)) valoresColetados.current.push(n);
+      }
+    }
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      if (boundsComputados.current) return;
+      const bounds = computePercentileBounds(valoresColetados.current);
+      if (bounds) {
+        boundsComputados.current = true; // trava: não recalcula ao panear
+        setNormBounds(bounds);
+      }
+    }, 250);
+  }, []); // deps vazias: acessa apenas refs e setter estável
 
   // Animação de flyTo quando flyTarget muda
   useEffect(() => {
@@ -1080,15 +1131,18 @@ export default function App() {
     // Determina se a escala deve ser invertida (alto=bom → verde no topo)
     const metricaInvertida = METRICAS_INVERTIDAS.has(filtros.metrica);
 
+    // Range adaptativo: P2/P98 dos dados reais quando disponível, senão fallback hardcoded
+    // Isso evita que outliers comprimam toda a distribuição numa única cor
+    const activeRange = normBounds ?? estatisticas;
+
     // Cor coroplética compartilhada por todas as camadas de fundo
     const getChoroplethColor = (f) => {
       const raw = f.properties?.valor_metrica;
       if (raw == null || raw === "") return [55, 60, 75, 160];
       const val = Number(raw);
       if (!isFinite(val)) return [55, 60, 75, 160];
-      return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
+      return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
     };
-
 
     if (nivelAtual === "NACIONAL") {
       layers.push(new MVTLayer({
@@ -1098,23 +1152,23 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 80],
+        onTileLoad: handleTileLoad,
         getFillColor: (f) => {
           const raw = f.properties?.valor_metrica;
-          if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
+          if (raw == null || raw === "") return [55, 60, 75, 160];
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
+          return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
         },
         getLineColor: [60, 60, 80, 200],
         getLineWidth: 1,
         lineWidthMinPixels: 0.8,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
     if (nivelAtual === "ESTADUAL") {
-      // When a UF is selected, show all UFs dimmed as geographic reference
       if (filtros.cod_uf) {
         layers.push(new MVTLayer({
           id: "ufs-dim-bg",
@@ -1135,18 +1189,19 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 60],
+        onTileLoad: handleTileLoad,
         getFillColor: (f) => {
           const raw = f.properties?.valor_metrica;
-          if (raw == null || raw === "") return [55, 60, 75, 160]; // cinza = sem dados
+          if (raw == null || raw === "") return [55, 60, 75, 160];
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, estatisticas.min, estatisticas.max), 220, metricaInvertida);
+          return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
         },
         getLineColor: [20, 20, 20, 150],
         getLineWidth: 0.5,
         lineWidthMinPixels: 0.3,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1159,13 +1214,14 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 60],
+        onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
         getLineColor: [20, 20, 20, 120],
         getLineWidth: 0.3,
         lineWidthMinPixels: 0.2,
         pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [estatisticas, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1186,7 +1242,7 @@ export default function App() {
       layers,
       getTooltip: makeTooltip(filtros.metrica, filtros.cid10_capitulo),
     });
-  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros]);
+  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, handleTileLoad]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -1245,14 +1301,20 @@ export default function App() {
         onNivelChange={setNivelForcado}
       />
 
-      {/* Legenda de cores */}
-      <Legenda
-        metrica={filtros.metrica}
-        min={estatisticas.min}
-        max={estatisticas.max}
-        semDados={METRICAS_SEM_DADOS.includes(filtros.metrica)}
-        invertida={METRICAS_INVERTIDAS.has(filtros.metrica)}
-      />
+      {/* Legenda de cores — usa P2/P98 adaptativos quando disponível */}
+      {(() => {
+        const displayRange = normBounds ?? estatisticas;
+        return (
+          <Legenda
+            metrica={filtros.metrica}
+            min={displayRange.min}
+            max={displayRange.max}
+            semDados={METRICAS_SEM_DADOS.includes(filtros.metrica)}
+            invertida={METRICAS_INVERTIDAS.has(filtros.metrica)}
+            adaptativo={normBounds !== null}
+          />
+        );
+      })()}
 
       {/* Painel de detalhes */}
       {featureSelecionada && (

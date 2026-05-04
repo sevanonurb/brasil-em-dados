@@ -174,7 +174,7 @@ function formatarValor(v, metrica) {
 
 const METRICAS_SAUDE_SET = new Set(["taxa_mortalidade", "taxa_homicidio", "mortalidade_infantil"]);
 
-export function Legenda({ metrica, min, max, semDados = false, invertida = false }) {
+export function Legenda({ metrica, min, max, semDados = false, invertida = false, adaptativo = false }) {
   const label = METRICAS_LABELS[metrica] ?? metrica;
 
   // Rótulo central da legenda
@@ -232,6 +232,11 @@ export function Legenda({ metrica, min, max, semDados = false, invertida = false
             <span style={{ color: "#4a5568" }}>{legendaMeio}</span>
             <span>{formatarValor(max, metrica)}</span>
           </div>
+          {adaptativo && (
+            <div style={{ fontSize: 9, color: "#4a5568", marginTop: 3, textAlign: "right", letterSpacing: "0.04em" }}>
+              P2–P98 dos dados carregados
+            </div>
+          )}
         </>
       )}
     </div>
