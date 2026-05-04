@@ -942,8 +942,7 @@ function normalizarValor(v, min, max) {
 
 /**
  * Computa os percentis P2 e P98 de um array de valores numéricos.
- * Retorna null se houver dados insuficientes ou distribuição degenerada.
- * Usado para normalização adaptativa que resiste a outliers.
+ * Usado para os rótulos da legenda (referência absoluta min/max visível).
  */
 function computePercentileBounds(values, pLow = 0.02, pHigh = 0.98) {
   if (values.length < 20) return null;
@@ -952,6 +951,24 @@ function computePercentileBounds(values, pLow = 0.02, pHigh = 0.98) {
   const hi = sorted[Math.min(Math.floor(sorted.length * pHigh), sorted.length - 1)];
   if (!isFinite(lo) || !isFinite(hi) || lo >= hi) return null;
   return { min: lo, max: hi };
+}
+
+/**
+ * Normalização por quantil: retorna o rank percentual de v no array ordenado.
+ * Resolve distribuições assimétricas (skewed) — garante que ~50% dos valores
+ * ficam em cada metade da escala, independente de concentração ou outliers.
+ * Usa busca binária: O(log n) por chamada.
+ */
+function quantileNormalizar(v, sortedValues) {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!isFinite(n) || !sortedValues || sortedValues.length === 0) return null;
+  let lo = 0, hi = sortedValues.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sortedValues[mid] < n) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo / sortedValues.length;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -965,10 +982,11 @@ export default function App() {
   const [estatisticas, setEstatisticas] = useState({ min: 0, max: 100 });
   const [flyTarget, setFlyTarget] = useState(null);
 
-  // Normalização adaptativa: coleta valores dos tiles carregados e computa P2/P98
-  const [normBounds, setNormBounds] = useState(null); // null = usa METRICAS_RANGES como fallback
+  // Normalização adaptativa: coleta valores dos tiles carregados e computa distribuição real
+  const [normBounds, setNormBounds] = useState(null); // {min: P2, max: P98} para rótulos da legenda
+  const [normSorted, setNormSorted] = useState(null); // array ordenado para normalização por quantil
   const valoresColetados = useRef([]);                 // valores acumulados dos tiles
-  const debounceTimer    = useRef(null);               // debounce para o cálculo de percentis
+  const debounceTimer    = useRef(null);               // debounce para o cálculo
   const boundsComputados = useRef(false);              // trava: calcula só uma vez por contexto
 
   const filtros = useFiltrosStore();
@@ -1003,14 +1021,18 @@ export default function App() {
   // Reseta a normalização adaptativa ao trocar contexto (métrica, ano, UF, nível)
   useEffect(() => {
     setNormBounds(null);
+    setNormSorted(null);
     valoresColetados.current = [];
     boundsComputados.current = false;
     clearTimeout(debounceTimer.current);
   }, [tileUrlKey, nivelAtual]);
 
-  // Callback estável: acumula valores dos tiles e computa P2/P98 uma vez por contexto
+  // Callback estável: acumula valores dos tiles e computa distribuição uma vez por contexto.
+  // Produz dois artefatos:
+  //   normSorted → array ordenado para normalização por quantil (cor)
+  //   normBounds → P2/P98 para rótulos da legenda (referência absoluta)
   const handleTileLoad = useCallback((tile) => {
-    if (boundsComputados.current) return; // já calculou para este contexto
+    if (boundsComputados.current) return;
     const features = tile.data;
     if (!Array.isArray(features)) return;
     for (const f of features) {
@@ -1023,13 +1045,17 @@ export default function App() {
     clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       if (boundsComputados.current) return;
-      const bounds = computePercentileBounds(valoresColetados.current);
+      const vals = valoresColetados.current;
+      if (vals.length < 20) return;
+      const sorted = vals.slice().sort((a, b) => a - b);
+      const bounds = computePercentileBounds(vals); // P2/P98 para legenda
       if (bounds) {
-        boundsComputados.current = true; // trava: não recalcula ao panear
-        setNormBounds(bounds);
+        boundsComputados.current = true;
+        setNormSorted(sorted); // array completo para quantile rank
+        setNormBounds(bounds); // P2/P98 para rótulos min/max da legenda
       }
     }, 250);
-  }, []); // deps vazias: acessa apenas refs e setter estável
+  }, []);
 
   // Animação de flyTo quando flyTarget muda
   useEffect(() => {
@@ -1131,17 +1157,25 @@ export default function App() {
     // Determina se a escala deve ser invertida (alto=bom → verde no topo)
     const metricaInvertida = METRICAS_INVERTIDAS.has(filtros.metrica);
 
-    // Range adaptativo: P2/P98 dos dados reais quando disponível, senão fallback hardcoded
-    // Isso evita que outliers comprimam toda a distribuição numa única cor
+    // Normaliza um valor para t ∈ [0,1]:
+    //   - Se normSorted disponível: usa rank percentual (quantil) — distribui bem mesmo com skew
+    //   - Fallback: normalização linear com P2/P98 ou METRICAS_RANGES
     const activeRange = normBounds ?? estatisticas;
+    const resolverT = (val) => {
+      if (normSorted) {
+        const t = quantileNormalizar(val, normSorted);
+        return t !== null ? t : 0;
+      }
+      return normalizarValor(val, activeRange.min, activeRange.max);
+    };
 
-    // Cor coroplética compartilhada por todas as camadas de fundo
+    // Cor coroplética compartilhada pela camada de setores
     const getChoroplethColor = (f) => {
       const raw = f.properties?.valor_metrica;
       if (raw == null || raw === "") return [55, 60, 75, 160];
       const val = Number(raw);
       if (!isFinite(val)) return [55, 60, 75, 160];
-      return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
+      return getCorCoroplética(resolverT(val), 220, metricaInvertida);
     };
 
     if (nivelAtual === "NACIONAL") {
@@ -1158,13 +1192,13 @@ export default function App() {
           if (raw == null || raw === "") return [55, 60, 75, 160];
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
+          return getCorCoroplética(resolverT(val), 220, metricaInvertida);
         },
         getLineColor: [60, 60, 80, 200],
         getLineWidth: 1,
         lineWidthMinPixels: 0.8,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1195,13 +1229,13 @@ export default function App() {
           if (raw == null || raw === "") return [55, 60, 75, 160];
           const val = Number(raw);
           if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(normalizarValor(val, activeRange.min, activeRange.max), 220, metricaInvertida);
+          return getCorCoroplética(resolverT(val), 220, metricaInvertida);
         },
         getLineColor: [20, 20, 20, 150],
         getLineWidth: 0.5,
         lineWidthMinPixels: 0.3,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
@@ -1221,7 +1255,7 @@ export default function App() {
         lineWidthMinPixels: 0.2,
         pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
-        updateTriggers: { getFillColor: [activeRange, tileUrlKey, metricaInvertida] },
+        updateTriggers: { getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida] },
       }));
     }
 
