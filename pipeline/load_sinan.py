@@ -107,7 +107,7 @@ def processar_doenca_ano(dis_code: str, ano: int, pop_map: dict[int, float],
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            parquet_set = SINAN.download(dis_code=dis_code, year=ano, data_dir=tmpdir)
+            parquet_set = SINAN.download(dis_code, ano, data_path=tmpdir)
             df = parquet_set.to_dataframe()
         except Exception as e:
             print(f"  ERRO [{dis_code}] {ano}: {e}")

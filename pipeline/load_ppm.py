@@ -45,16 +45,20 @@ DB_PARAMS = dict(
 SIDRA_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 
 
-def sidra_fetch(tabela: int, variavel: int, periodo: int | str) -> dict[int, float]:
+def sidra_fetch(tabela: int, variavel: int, periodo: int | str,
+                classificacao: str = None) -> dict[int, float]:
     """
     Baixa dados para todos os municípios (N6[all]).
     Retorna dict {cod_municipio_7digits: valor}.
+    classificacao: e.g. "79[2670]" para bovino em T3939.
     """
     url = (
         f"{SIDRA_BASE}/{tabela}/periodos/{periodo}/variaveis/{variavel}"
         f"?localidades=N6[all]"
     )
-    print(f"  GET T{tabela} V{variavel} {periodo} ...")
+    if classificacao:
+        url += f"&classificacao={classificacao}"
+    print(f"  GET T{tabela} V{variavel} C={classificacao or 'all'} {periodo} ...")
     for tentativa in range(3):
         try:
             r = requests.get(url, timeout=120)
@@ -114,24 +118,37 @@ def get_geo_maps(conn) -> tuple[dict, dict]:
             "SELECT cod_ibge_7, populacao_2022, area_km2 FROM geo.municipios"
         )
         rows = cur.fetchall()
-    pop_map  = {r[0]: r[1] for r in rows if r[1] and r[1] > 0}
-    area_map = {r[0]: r[2] for r in rows if r[2] and r[2] > 0}
+    pop_map  = {r[0]: float(r[1]) for r in rows if r[1] and r[1] > 0}
+    area_map = {r[0]: float(r[2]) for r in rows if r[2] and r[2] > 0}
     return pop_map, area_map
 
 
+# T3939 tem apenas V105 (Efetivo dos rebanhos). O tipo de animal é
+# especificado via classificação 79[categoria]. IDs das categorias:
+REBANHO_CATS = {
+    "bovino":     2670,
+    "equino":     2672,
+    "suino":      32794,
+    "ovino":      2677,
+    "caprino":    2681,
+    "galinaceos": 32796,
+}
+
 # ─── T3939 — Rebanhos ─────────────────────────────────────────────────────────
 
-def carregar_rebanho(conn, variavel: int, nome_animal: str,
+def carregar_rebanho(conn, nome_animal: str,
                      anos: list[int],
                      pop_map: dict, area_map: dict,
                      skip_km2: bool = False):
     """
-    Carrega efetivo de um rebanho (T3939) e calcula métricas per-hab e per-km².
-    variavel: V105=bovino, V106=equino, V107=suíno, V108=ovino, V109=caprino, V112=galináceos.
+    Carrega efetivo de um rebanho (T3939 V105) e calcula métricas per-hab e per-km².
+    O tipo de animal é selecionado via classificação 79[cat_id].
     """
-    print(f"\n=== T3939 V{variavel}: rebanho {nome_animal} ===")
+    cat_id = REBANHO_CATS[nome_animal]
+    classif = f"79[{cat_id}]"
+    print(f"\n=== T3939 V105 C={classif}: rebanho {nome_animal} ===")
     for ano in anos:
-        dados = sidra_fetch(3939, variavel, ano)
+        dados = sidra_fetch(3939, 105, ano, classificacao=classif)
         rows_hab = []
         rows_km2 = []
         for cod, cabecas in dados.items():
@@ -236,12 +253,12 @@ def main():
         default=[2019, 2020, 2021, 2022, 2023],
         help="Anos a carregar (padrão: 2019-2023)"
     )
-    parser.add_argument("--skip-bovino",     action="store_true", help="Pula rebanho bovino (V105)")
-    parser.add_argument("--skip-equino",     action="store_true", help="Pula rebanho equino (V106)")
-    parser.add_argument("--skip-suino",      action="store_true", help="Pula rebanho suíno (V107)")
-    parser.add_argument("--skip-ovino",      action="store_true", help="Pula rebanho ovino (V108)")
-    parser.add_argument("--skip-caprino",    action="store_true", help="Pula rebanho caprino (V109)")
-    parser.add_argument("--skip-galinaceos", action="store_true", help="Pula galináceos (V112)")
+    parser.add_argument("--skip-bovino",     action="store_true", help="Pula rebanho bovino")
+    parser.add_argument("--skip-equino",     action="store_true", help="Pula rebanho equino")
+    parser.add_argument("--skip-suino",      action="store_true", help="Pula rebanho suíno")
+    parser.add_argument("--skip-ovino",      action="store_true", help="Pula rebanho ovino")
+    parser.add_argument("--skip-caprino",    action="store_true", help="Pula rebanho caprino")
+    parser.add_argument("--skip-galinaceos", action="store_true", help="Pula galináceos")
     parser.add_argument("--skip-leite",      action="store_true", help="Pula produção de leite (V214)")
     parser.add_argument("--skip-mel",        action="store_true", help="Pula produção de mel (V216)")
     parser.add_argument("--skip-ovos",       action="store_true", help="Pula produção de ovos (V217)")
@@ -254,21 +271,19 @@ def main():
         pop_map, area_map = get_geo_maps(conn)
         print(f"  Geo maps: {len(pop_map)} municípios com pop, {len(area_map)} com área")
 
-        print("\n──── PPM — Efetivo dos Rebanhos (T3939) ────")
+        print("\n──── PPM — Efetivo dos Rebanhos (T3939 V105) ────")
         if not args.skip_bovino:
-            # Bovino: carrega per-hab e per-km²
-            carregar_rebanho(conn, 105, "bovino", args.anos, pop_map, area_map)
+            carregar_rebanho(conn, "bovino", args.anos, pop_map, area_map)
         if not args.skip_equino:
-            # Equino: só per-hab (km² menos relevante para equinos)
-            carregar_rebanho(conn, 106, "equino", args.anos, pop_map, area_map, skip_km2=True)
+            carregar_rebanho(conn, "equino", args.anos, pop_map, area_map, skip_km2=True)
         if not args.skip_suino:
-            carregar_rebanho(conn, 107, "suino", args.anos, pop_map, area_map, skip_km2=True)
+            carregar_rebanho(conn, "suino", args.anos, pop_map, area_map, skip_km2=True)
         if not args.skip_ovino:
-            carregar_rebanho(conn, 108, "ovino", args.anos, pop_map, area_map, skip_km2=True)
+            carregar_rebanho(conn, "ovino", args.anos, pop_map, area_map, skip_km2=True)
         if not args.skip_caprino:
-            carregar_rebanho(conn, 109, "caprino", args.anos, pop_map, area_map, skip_km2=True)
+            carregar_rebanho(conn, "caprino", args.anos, pop_map, area_map, skip_km2=True)
         if not args.skip_galinaceos:
-            carregar_rebanho(conn, 112, "galinaceos", args.anos, pop_map, area_map, skip_km2=True)
+            carregar_rebanho(conn, "galinaceos", args.anos, pop_map, area_map, skip_km2=True)
 
         print("\n──── PPM — Produção Pecuária (T74) ────")
         if not args.skip_leite:

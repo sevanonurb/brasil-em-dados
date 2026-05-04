@@ -31,11 +31,15 @@ import io
 import os
 import time
 import unicodedata
+import warnings
 
 import psycopg2
 import pandas as pd
 import requests
+import urllib3
 from psycopg2.extras import execute_values
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DB_PARAMS = dict(
     host=os.environ.get("POSTGRES_HOST", "localhost"),
@@ -45,13 +49,57 @@ DB_PARAMS = dict(
     password=os.environ.get("POSTGRES_PASSWORD", ""),
 )
 
-# Dados Abertos Transportes — arquivo de frota por município
-# Formato: CSV mensal por competência AAAAMM
-# URL padrão para dezembro de cada ano
-SENATRAN_URL = (
-    "https://dados.transportes.gov.br/dataset/dd7e6e94-f6e4-4e5d-89a4-e04c2e19ffe5/"
-    "resource/a7e3b0a2-e0da-49c3-8c9d-f3dddffb8060/download/frota_por_municipio_e_tipo_{aaaamm}.csv"
-)
+# Dados Abertos Transportes — API CKAN do portal dados.transportes.gov.br
+CKAN_API = "https://dados.transportes.gov.br/api/3/action"
+RENAVAM_PACKAGE = "registro-nacional-de-veiculos-automotores-renavam"
+
+# Cache de URLs por ano — preenchido em runtime via CKAN API
+# Fallback para os anos cujos resource IDs são conhecidos
+RESOURCE_URLS_FALLBACK = {
+    2020: (
+        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
+        "resource/82b85990-ae4e-4b01-a8a7-e9ad30c47112/download/frota_munic_modelo_dezembro_2020.csv"
+    ),
+    2021: (
+        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
+        "resource/f211d37c-7f9e-4531-8f83-c6d66fb0a030/download/frota-munic-modelo-dezembro-2021.csv"
+    ),
+    2022: (
+        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
+        "resource/9427992a-64e9-4ed2-bb78-a268bfada801/download/frota_munic_modelo_dezembro_2022.csv"
+    ),
+}
+
+
+def get_resource_url(ano: int) -> str | None:
+    """
+    Obtém a URL de download do CSV de frota por município para dezembro do ano.
+    Tenta o CKAN API primeiro; usa fallback se necessário.
+    """
+    # Fallback para anos com URL conhecida
+    if ano in RESOURCE_URLS_FALLBACK:
+        return RESOURCE_URLS_FALLBACK[ano]
+
+    # Tenta descobrir via CKAN API
+    try:
+        r = requests.get(
+            f"{CKAN_API}/package_show?id={RENAVAM_PACKAGE}",
+            timeout=20, verify=False
+        )
+        if r.status_code != 200:
+            return None
+        resources = r.json()["result"]["resources"]
+        target = f"12-{ano}"
+        for res in resources:
+            name = res.get("name", "")
+            if target in name and "zip" not in name.lower():
+                url = res.get("url", "")
+                if url:
+                    print(f"  CKAN: recurso encontrado: {name}")
+                    return url
+    except Exception as e:
+        print(f"  AVISO: CKAN API falhou: {e}")
+    return None
 
 # UF sigla → cod_uf IBGE
 UF_COD = {
@@ -116,31 +164,30 @@ def build_geocode_index(conn) -> dict[tuple[str, str], int]:
 
 
 def download_csv(ano: int) -> pd.DataFrame | None:
-    """Tenta baixar CSV de dezembro do ano. Fallback para novembro se não encontrar."""
-    for mes in (12, 11, 10):
-        aaaamm = f"{ano}{mes:02d}"
-        url = SENATRAN_URL.format(aaaamm=aaaamm)
-        print(f"  GET {url} ...")
-        try:
-            r = requests.get(url, timeout=120)
-            if r.status_code == 200:
-                # Tenta separador ;, depois ,
-                for sep in (";", ",", "\t"):
-                    try:
-                        df = pd.read_csv(io.BytesIO(r.content), sep=sep, dtype=str, encoding="latin-1")
-                        if len(df.columns) >= 4:
-                            return df
-                    except Exception:
-                        pass
-                print(f"  AVISO: CSV com formato inesperado em {aaaamm}")
-            elif r.status_code == 404:
-                print(f"  404 para {aaaamm}, tentando mês anterior...")
-            else:
-                print(f"  HTTP {r.status_code} para {aaaamm}")
-        except requests.exceptions.Timeout:
-            print(f"  Timeout para {aaaamm}")
-        time.sleep(1)
-    return None
+    """Baixa CSV de frota por município para dezembro do ano via CKAN API."""
+    url = get_resource_url(ano)
+    if url is None:
+        print(f"  Sem recurso CSV disponível para {ano} no portal dados.transportes.gov.br")
+        return None
+    print(f"  GET {url[:100]} ...")
+    try:
+        r = requests.get(url, timeout=120, verify=False)
+        if r.status_code == 200:
+            for sep in (";", ",", "\t"):
+                try:
+                    df = pd.read_csv(io.BytesIO(r.content), sep=sep, dtype=str, encoding="latin-1")
+                    if len(df.columns) >= 4:
+                        return df
+                except Exception:
+                    pass
+            print(f"  AVISO: CSV com formato inesperado para {ano}")
+            return None
+        else:
+            print(f"  HTTP {r.status_code} para {ano}")
+            return None
+    except requests.exceptions.Timeout:
+        print(f"  Timeout para {ano}")
+        return None
 
 
 def upsert_metricas(rows: list[tuple], conn):
@@ -164,9 +211,32 @@ def upsert_metricas(rows: list[tuple], conn):
     print(f"  Upserted {len(rows):,} registros em api.metricas_municipio")
 
 
+# Mapeamento de colunas no formato LARGO (wide) para categorias internas
+# (usado quando o CSV tem uma coluna por tipo de veículo)
+WIDE_COL_MAP = {
+    "AUTOMOVEL":       "automovel",
+    "CAMINHAO":        "caminhao",
+    "CAMINHAO TRATOR": "caminhao",
+    "CAMINHONETE":     "caminhao",
+    "CAMIONETA":       "caminhao",
+    "MOTOCICLETA":     "moto",
+    "MOTONETA":        "moto",
+    "CICLOMOTOR":      "moto",
+    "TRICICLO":        "moto",
+    "QUADRICICLO":     "moto",
+    "ONIBUS":          "onibus",
+    "MICRO-ONIBUS":    "onibus",
+}
+
+
+def _is_wide_format(df: pd.DataFrame) -> bool:
+    """Detecta se o CSV está no formato largo (uma coluna por tipo de veículo)."""
+    return "AUTOMOVEL" in df.columns and ("TIPO" not in " ".join(df.columns))
+
+
 def processar_ano(conn, ano: int, geo_index: dict, pop_map: dict,
                   skip_onibus: bool = False):
-    """Processa um ano de dados SENATRAN."""
+    """Processa um ano de dados SENATRAN — suporta formato tall (2020/2022) e wide (2021)."""
     df = download_csv(ano)
     if df is None:
         print(f"  Não foi possível obter dados de {ano}")
@@ -174,51 +244,75 @@ def processar_ano(conn, ano: int, geo_index: dict, pop_map: dict,
 
     # Normaliza nomes de colunas
     df.columns = [str(c).strip().upper() for c in df.columns]
+    # Remove BOM do primeiro nome de coluna (UTF-8 com BOM → 'Ï»¿UF' → 'UF')
+    if df.columns[0].startswith("Ï"):
+        df.columns = ["UF"] + list(df.columns[1:])
     print(f"  Ano {ano}: colunas = {list(df.columns)}")
 
-    # Identifica colunas: UF, MUNICIPIO, TIPO, TOTAL
-    col_uf   = next((c for c in df.columns if "UF" in c and len(c) <= 5), None)
-    col_mun  = next((c for c in df.columns if "MUNICIPIO" in c or "MUNICÍPIO" in c), None)
-    col_tipo = next((c for c in df.columns if "TIPO" in c), None)
-    col_qtd  = next((c for c in df.columns if "TOTAL" in c or "QTD" in c or "QUANTIDADE" in c), None)
+    col_uf  = next((c for c in df.columns if c == "UF" or (c.startswith("UF") and len(c) <= 5)), None)
+    col_mun = next((c for c in df.columns if "MUNICIPIO" in c or "MUNICÍPIO" in c), None)
 
-    if not all([col_uf, col_mun, col_tipo, col_qtd]):
-        print(f"  AVISO: colunas esperadas não encontradas. UF={col_uf}, MUN={col_mun}, TIPO={col_tipo}, QTD={col_qtd}")
-        # Fallback: assume primeira coluna = UF, segunda = mun, terceira = tipo, quarta = total
-        cols = list(df.columns)
-        if len(cols) >= 4:
-            col_uf, col_mun, col_tipo, col_qtd = cols[0], cols[1], cols[2], cols[3]
-        else:
+    if not col_uf or not col_mun:
+        print(f"  ERRO: colunas UF ou MUNICIPIO não encontradas")
+        return
+
+    if _is_wide_format(df):
+        # ── Formato largo: uma coluna por tipo de veículo ──
+        # Agrega por município somando as colunas relevantes
+        mun_tipo: dict[tuple[int, str], float] = {}
+        miss = 0
+        for _, row in df.iterrows():
+            uf  = str(row[col_uf]).strip().upper()
+            mun = str(row[col_mun]).strip()
+            key = (normalize_str(mun), uf)
+            cod = geo_index.get(key)
+            if cod is None:
+                miss += 1
+                continue
+            for col_name, cat in WIDE_COL_MAP.items():
+                if col_name in df.columns:
+                    try:
+                        val = float(str(row[col_name]).replace(".", "").replace(",", "."))
+                    except (ValueError, TypeError):
+                        val = 0.0
+                    k = (cod, cat)
+                    mun_tipo[k] = mun_tipo.get(k, 0.0) + val
+        print(f"  Ano {ano} (wide): {len(set(c for c,_ in mun_tipo))} municípios, {miss} geocod. falhas")
+    else:
+        # ── Formato alto (tall): UF, MUNICIPIO, TIPO, QUANTIDADE ──
+        col_tipo = next((c for c in df.columns if "TIPO" in c), None)
+        col_qtd  = next((c for c in df.columns if "TOTAL" in c or "QTD" in c or "QUANTIDADE" in c), None)
+        if not col_tipo or not col_qtd:
+            print(f"  AVISO: colunas TIPO/QTD não encontradas. TIPO={col_tipo}, QTD={col_qtd}")
             return
 
-    df[col_qtd] = pd.to_numeric(df[col_qtd].str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce").fillna(0)
+        df[col_qtd] = pd.to_numeric(
+            df[col_qtd].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False),
+            errors="coerce"
+        ).fillna(0)
 
-    # Agrega por (UF, município, tipo)
-    contagens: dict[tuple[str, str, str], float] = {}
-    for _, row in df.iterrows():
-        uf   = str(row[col_uf]).strip().upper()
-        mun  = str(row[col_mun]).strip()
-        tipo = str(row[col_tipo]).strip().upper()
-        qtd  = float(row[col_qtd]) if pd.notna(row[col_qtd]) else 0.0
-        key_tipo = TIPO_MAP.get(tipo, "outro")
-        if key_tipo == "outro":
-            key_tipo = "outro"
-        k = (uf, mun, key_tipo)
-        contagens[k] = contagens.get(k, 0.0) + qtd
+        contagens: dict[tuple[str, str, str], float] = {}
+        for _, row in df.iterrows():
+            uf   = str(row[col_uf]).strip().upper()
+            mun  = str(row[col_mun]).strip()
+            tipo = str(row[col_tipo]).strip().upper()
+            qtd  = float(row[col_qtd]) if pd.notna(row[col_qtd]) else 0.0
+            key_tipo = TIPO_MAP.get(tipo, "outro")
+            k = (uf, mun, key_tipo)
+            contagens[k] = contagens.get(k, 0.0) + qtd
 
-    # Geocodifica e agrega por (cod_municipio, tipo)
-    mun_tipo: dict[tuple[int, str], float] = {}
-    miss = 0
-    for (uf, mun, tipo), qtd in contagens.items():
-        key = (normalize_str(mun), uf)
-        cod = geo_index.get(key)
-        if cod is None:
-            miss += 1
-            continue
-        k = (cod, tipo)
-        mun_tipo[k] = mun_tipo.get(k, 0.0) + qtd
+        mun_tipo: dict[tuple[int, str], float] = {}
+        miss = 0
+        for (uf, mun, tipo), qtd in contagens.items():
+            key = (normalize_str(mun), uf)
+            cod = geo_index.get(key)
+            if cod is None:
+                miss += 1
+                continue
+            k = (cod, tipo)
+            mun_tipo[k] = mun_tipo.get(k, 0.0) + qtd
 
-    print(f"  Ano {ano}: {len(mun_tipo)} (cod,tipo), {miss} geocodificações falhas")
+        print(f"  Ano {ano} (tall): {len(mun_tipo)} (cod,tipo), {miss} geocodificações falhas")
 
     # Agrega total
     totais: dict[int, float] = {}
@@ -263,8 +357,8 @@ def main():
     )
     parser.add_argument(
         "--anos", nargs="+", type=int,
-        default=[2019, 2020, 2021, 2022, 2023, 2024],
-        help="Anos a carregar (padrão: 2019-2024)"
+        default=[2020, 2021, 2022],
+        help="Anos a carregar (padrão: 2020-2022 — anos com CSV disponível)"
     )
     parser.add_argument("--skip-onibus", action="store_true",
                         help="Pula frota de ônibus")

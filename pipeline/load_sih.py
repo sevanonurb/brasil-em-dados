@@ -112,8 +112,17 @@ def processar_uf_ano(uf: str, ano: int) -> dict:
     print(f"  [{uf}] {ano}: baixando SIH/RD ...")
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            parquet_set = SIH.download("RD", uf, ano, data_dir=tmpdir)
-            df = parquet_set.to_dataframe()
+            result = SIH.download(uf, ano, list(range(1, 13)), "RD", data_dir=tmpdir)
+            # PySUS 1.x returns a single ParquetSet or a list of them
+            if hasattr(result, "to_dataframe"):
+                df = result.to_dataframe()
+            else:
+                # list of ParquetSet — concatenate all
+                frames = [ps.to_dataframe() for ps in result if hasattr(ps, "to_dataframe")]
+                if not frames:
+                    print(f"  [{uf}] {ano}: nenhum ParquetSet retornado")
+                    return {}
+                df = pd.concat(frames, ignore_index=True)
         except Exception as e:
             print(f"  ERRO [{uf}] {ano}: {e}")
             return {}
