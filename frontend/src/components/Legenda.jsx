@@ -18,10 +18,12 @@ export function Legenda({ metrica, min, max, semDados = false, invertida = false
         ? "↑ mais denso"
         : "↑ maior valor";
 
-  // Gradiente CSS espelha getCorCoroplética
+  // Gradiente CSS espelha RAMPA_COR de main.jsx (6 paradas)
+  // Azul → Teal → Verde → Amarelo → Laranja → Violeta
+  const rampaNormal = "linear-gradient(to right, rgb(40,130,255), rgb(0,210,190), rgb(100,230,50), rgb(255,220,0), rgb(255,65,15), rgb(175,20,220))";
   const gradiente = invertida
-    ? "linear-gradient(to right, rgb(255,0,0), rgb(255,255,0), rgb(0,220,50))"   // vermelho→amarelo→verde
-    : "linear-gradient(to right, rgb(0,255,255), rgb(255,255,0), rgb(255,0,0))"; // ciano→amarelo→vermelho
+    ? "linear-gradient(to right, rgb(175,20,220), rgb(255,65,15), rgb(255,220,0), rgb(100,230,50), rgb(0,210,190), rgb(40,130,255))"
+    : rampaNormal;
 
   return (
     <div style={{

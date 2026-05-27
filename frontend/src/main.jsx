@@ -796,21 +796,36 @@ const INITIAL_VIEW = {
  * - Padrão (invertida=false): ciano → amarelo → vermelho  (baixo=neutro/bom, alto=ruim)
  * - Invertida (invertida=true): vermelho → amarelo → verde (baixo=ruim, alto=bom)
  */
+// Rampa de 6 paradas — perceptualmente distinta em cada faixa percentil.
+// Com normalização quantílica, cada ~17% dos municípios recebe uma cor própria.
+// Ultra-violeta no extremo sinaliza outliers sem se confundir com o resto.
+//   t=0.0  Azul         — valor mais baixo
+//   t=0.2  Ciano/Teal   — baixo-médio
+//   t=0.4  Verde-lima   — médio-baixo
+//   t=0.6  Amarelo/Ouro — médio-alto
+//   t=0.8  Laranja-verm — alto
+//   t=1.0  Violeta      — extremo (ultra-violeta)
+const RAMPA_COR = [
+  [40, 130, 255],   // 0.0 — Azul
+  [0,  210, 190],   // 0.2 — Teal
+  [100, 230, 50],   // 0.4 — Verde-lima
+  [255, 220, 0],    // 0.6 — Amarelo/Ouro
+  [255, 65,  15],   // 0.8 — Laranja-vermelho
+  [175, 20, 220],   // 1.0 — Violeta (ultra-violeta)
+];
+
 function getCorCoroplética(valorNormalizado, opacity = 220, invertida = false) {
-  const t = Math.max(0, Math.min(1, valorNormalizado));
-  let r, g, b;
-  if (invertida) {
-    // vermelho (baixo=ruim) → amarelo (meio) → verde (alto=bom)
-    r = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
-    g = Math.round(t < 0.5 ? t * 2 * 255 : 255);
-    b = 0;
-  } else {
-    // ciano (baixo) → amarelo (meio) → vermelho (alto=ruim)
-    r = Math.round(t < 0.5 ? t * 2 * 255 : 255);
-    g = Math.round(t < 0.5 ? 255 : (1 - t) * 2 * 255);
-    b = Math.round(t < 0.5 ? 255 - t * 2 * 255 : 0);
-  }
-  return [r, g, b, opacity];
+  const t = Math.max(0, Math.min(1, invertida ? 1 - valorNormalizado : valorNormalizado));
+  const scaled = t * (RAMPA_COR.length - 1);
+  const i = Math.min(Math.floor(scaled), RAMPA_COR.length - 2);
+  const f = scaled - i;
+  const c0 = RAMPA_COR[i], c1 = RAMPA_COR[i + 1];
+  return [
+    Math.round(c0[0] + f * (c1[0] - c0[0])),
+    Math.round(c0[1] + f * (c1[1] - c0[1])),
+    Math.round(c0[2] + f * (c1[2] - c0[2])),
+    opacity,
+  ];
 }
 
 function normalizarValor(v, min, max) {
