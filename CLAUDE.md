@@ -17,7 +17,6 @@ Painel Geoespacial Iterativo do Brasil — a continental-scale geospatial data v
 | Frontend (Vite) | 5173 | http://localhost:5173 |
 | PostGIS | 5432 | direct psql |
 | PgBouncer | 6432 | connection pool |
-| Redis | 6380 | (host port; container is 6379) |
 | Prometheus | 9090 | http://localhost:9090 |
 
 Nginx at port 80 routes: `/api/` → metadata API (`brasil_api` container, internal port 8001); `/` → Martin tile server with 5-minute tile cache.

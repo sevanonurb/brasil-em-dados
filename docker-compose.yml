@@ -74,30 +74,11 @@ services:
       timeout: 5s
       retries: 3
 
-  # ─── Cache de tiles em memória ────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: brasil_redis
-    restart: unless-stopped
-    command: >
-      redis-server
-        --maxmemory 4gb
-        --maxmemory-policy allkeys-lru
-        --save ""
-        --appendonly no
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
   # ─── API de metadados (anos disponíveis por métrica) ─────────────────────
   api:
-    image: python:3.11-alpine
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     container_name: brasil_api
     restart: unless-stopped
     environment:
@@ -107,9 +88,7 @@ services:
       POSTGRES_HOST: postgis
       PORT: 8001
     volumes:
-      - ./api:/app
-    working_dir: /app
-    command: ["sh", "-c", "pip install psycopg2-binary -q && python server.py"]
+      - ./api/server.py:/app/server.py:ro
     depends_on:
       postgis:
         condition: service_healthy
@@ -141,7 +120,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
       POSTGRES_HOST: postgis
-      REDIS_URL: redis://redis:6379
     volumes:
       - ./pipeline:/opt/dagster/app
       - dagster_home:/opt/dagster/dagster_home
@@ -150,8 +128,6 @@ services:
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3001", "-w", "workspace.yaml"]
     depends_on:
       postgis:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   dagster_daemon:
@@ -166,7 +142,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
       POSTGRES_HOST: postgis
-      REDIS_URL: redis://redis:6379
     volumes:
       - ./pipeline:/opt/dagster/app
       - dagster_home:/opt/dagster/dagster_home
@@ -213,14 +188,13 @@ services:
       - ./frontend:/app
     ports:
       - "5173:5173"
-    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+    command: ["sh", "-c", "apk add --no-cache bash python3 && npm install && npm run dev -- --host 0.0.0.0"]
     environment:
       VITE_MARTIN_URL: http://localhost:3000
       VITE_API_URL: http://localhost:80
 
 volumes:
   postgis_data:
-  redis_data:
   dagster_home:
   prometheus_data:
   grafana_data:

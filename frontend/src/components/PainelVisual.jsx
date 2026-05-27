@@ -1,10 +1,11 @@
 /**
  * PainelVisual.jsx
- * Painel de controles visuais da camada de dados e do mapa base.
- * Posicionado na lateral esquerda, independente dos filtros de dados.
+ * Painel de controles visuais: estilo do mapa, rótulos, bordas,
+ * comparação lado-a-lado, ferramentas e navegação.
  */
 
 import React, { useState } from "react";
+import { GRUPOS_METRICAS } from "./PainelControles.jsx";
 
 // ── Componentes internos ──────────────────────────────────────────────────────
 
@@ -60,12 +61,7 @@ function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick
         type="range" min={min} max={max} step={step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
-        style={{
-          width: "100%",
-          height: 4,
-          accentColor: "#4299e1",
-          cursor: "pointer",
-        }}
+        style={{ width: "100%", height: 4, accentColor: "#4299e1", cursor: "pointer" }}
       />
     </div>
   );
@@ -74,11 +70,9 @@ function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick
 function ToggleRow({ label, subLabel, checked, onChange }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-      <div>
+      <div style={{ flex: 1 }}>
         <div style={{ fontSize: 12, color: "#a0aec0" }}>{label}</div>
-        {subLabel && (
-          <div style={{ fontSize: 10, color: "#4a5568", marginTop: 1 }}>{subLabel}</div>
-        )}
+        {subLabel && <div style={{ fontSize: 10, color: "#4a5568", marginTop: 1 }}>{subLabel}</div>}
       </div>
       <Toggle checked={checked} onChange={onChange} />
     </div>
@@ -89,8 +83,7 @@ function Secao({ titulo }) {
   return (
     <div style={{
       fontSize: 9, color: "#4a5568", letterSpacing: "0.10em", textTransform: "uppercase",
-      marginTop: 12, marginBottom: 8,
-      paddingTop: 10, borderTop: "1px solid #2d3748",
+      marginTop: 12, marginBottom: 8, paddingTop: 10, borderTop: "1px solid #2d3748",
     }}>
       {titulo}
     </div>
@@ -117,22 +110,55 @@ function BotaoNav({ label, onClick }) {
   );
 }
 
+function BotaoIcone({ title, icon, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        flex: 1, padding: "6px 4px", borderRadius: 6, cursor: "pointer", fontSize: 13,
+        background: hover ? "#1e2a3a" : "#1a202c",
+        border: "1px solid " + (hover ? "#4299e1" : "#2d3748"),
+        color: hover ? "#e2e8f0" : "#a0aec0",
+        transition: "all 0.15s", textAlign: "center", lineHeight: 1,
+      }}
+    >
+      <div>{icon}</div>
+      <div style={{ fontSize: 9, marginTop: 2 }}>{title}</div>
+    </button>
+  );
+}
+
+const selectStyleMini = {
+  width: "100%",
+  background: "#2d3748",
+  border: "1px solid #4a5568",
+  borderRadius: 5,
+  color: "#e2e8f0",
+  padding: "4px 6px",
+  fontSize: 11,
+};
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function PainelVisual({ visual, onUpdate, onFlyTo }) {
+export function PainelVisual({
+  visual, onUpdate, onFlyTo,
+  comparacao, onComparacaoUpdate,
+  onScreenshot, onFullscreen,
+  anosDisponiveis,
+}) {
   const [aberto, setAberto] = useState(false);
   const [btnHover, setBtnHover] = useState(false);
 
   const isBasemapManual = visual.opacidadeBasemap !== null;
-
-  const basemapValue = isBasemapManual
-    ? visual.opacidadeBasemap
-    : 0.3; // valor representativo do "auto"
+  const basemapValue = isBasemapManual ? visual.opacidadeBasemap : 0.3;
 
   return (
     <div style={{ position: "absolute", left: 16, bottom: 60, zIndex: 10, userSelect: "none" }}>
 
-      {/* Painel expandido — abre para cima */}
       {aberto && (
         <div style={{
           background: "rgba(13,15,22,0.93)",
@@ -140,12 +166,13 @@ export function PainelVisual({ visual, onUpdate, onFlyTo }) {
           borderRadius: 10,
           padding: "14px 14px 12px",
           backdropFilter: "blur(14px)",
-          width: 228,
+          width: 240,
           marginBottom: 8,
           boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+          maxHeight: "calc(100vh - 140px)",
+          overflowY: "auto",
         }}>
 
-          {/* Cabeçalho */}
           <div style={{ fontSize: 10, color: "#4a5568", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 14 }}>
             Controles Visuais
           </div>
@@ -157,7 +184,6 @@ export function PainelVisual({ visual, onUpdate, onFlyTo }) {
             min={0} max={1} step={0.01}
             onChange={v => onUpdate("opacidadeOverlay", v)}
           />
-
           <SliderRow
             label="Opacidade — mapa base"
             value={basemapValue}
@@ -167,41 +193,132 @@ export function PainelVisual({ visual, onUpdate, onFlyTo }) {
             onBadgeClick={() => onUpdate("opacidadeBasemap", isBasemapManual ? null : 0.35)}
           />
 
+          {/* ── Camadas do mapa ── */}
+          <Secao titulo="Camadas" />
+          <ToggleRow
+            label="Ruas e estradas"
+            subLabel="Vias sobrepostas ao indicador"
+            checked={visual.mostrarRuas}
+            onChange={v => onUpdate("mostrarRuas", v)}
+          />
+          {visual.mostrarRuas && (
+            <SliderRow
+              label="Opacidade — ruas"
+              value={visual.opacidadeRuas ?? 0.5}
+              min={0} max={1} step={0.01}
+              onChange={v => onUpdate("opacidadeRuas", v)}
+            />
+          )}
+          <ToggleRow
+            label="Imagem de satélite"
+            subLabel="Foto aérea por baixo dos dados"
+            checked={visual.mostrarSatelite}
+            onChange={v => onUpdate("mostrarSatelite", v)}
+          />
+          {visual.mostrarSatelite && (
+            <SliderRow
+              label="Opacidade — satélite"
+              value={visual.opacidadeSatelite ?? 0.4}
+              min={0} max={1} step={0.01}
+              onChange={v => onUpdate("opacidadeSatelite", v)}
+            />
+          )}
+          <ToggleRow
+            label="Nomes das cidades"
+            subLabel="Rótulos de municípios e localidades"
+            checked={visual.mostrarNomes}
+            onChange={v => onUpdate("mostrarNomes", v)}
+          />
+
           {/* ── Bordas ── */}
           <Secao titulo="Bordas" />
-
           <ToggleRow
             label="Municípios"
             checked={visual.bordurasMunicipios}
             onChange={v => onUpdate("bordurasMunicipios", v)}
           />
-
           <ToggleRow
             label="Estados"
             checked={visual.bordurasEstados}
             onChange={v => onUpdate("bordurasEstados", v)}
           />
 
+          {/* ── Comparação ── */}
+          <Secao titulo="Comparação" />
+          <ToggleRow
+            label="Dividir mapa"
+            subLabel="Compare dois indicadores lado a lado"
+            checked={comparacao.ativo}
+            onChange={v => onComparacaoUpdate("ativo", v)}
+          />
+          {comparacao.ativo && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 2 }}>
+              <div>
+                <label style={{ fontSize: 10, color: "#718096", display: "block", marginBottom: 2 }}>
+                  Indicador (lado direito)
+                </label>
+                <select
+                  value={comparacao.metrica}
+                  onChange={e => onComparacaoUpdate("metrica", e.target.value)}
+                  style={selectStyleMini}
+                >
+                  {GRUPOS_METRICAS.map(g => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.opcoes.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: "#718096", display: "block", marginBottom: 2 }}>
+                  Ano (lado direito)
+                </label>
+                <select
+                  value={comparacao.ano}
+                  onChange={e => onComparacaoUpdate("ano", Number(e.target.value))}
+                  style={selectStyleMini}
+                >
+                  {(anosDisponiveis?.[comparacao.metrica] ?? [2023, 2022]).map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* ── Contexto ── */}
           <Secao titulo="Contexto" />
-
           <ToggleRow
-            label="Continente Sul-americano"
-            subLabel="Exibe mapa base em todos os zooms"
+            label="Continente sul-americano"
+            subLabel="Mapa base em todos os zooms"
             checked={visual.mostrarSulAmerica}
             onChange={v => onUpdate("mostrarSulAmerica", v)}
           />
 
+          {/* ── Ferramentas ── */}
+          <Secao titulo="Ferramentas" />
+          <ToggleRow
+            label="Coordenadas"
+            subLabel="Lat/lon ao mover o mouse"
+            checked={visual.mostrarCoordenadas}
+            onChange={v => onUpdate("mostrarCoordenadas", v)}
+          />
+          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+            <BotaoIcone title="Captura" icon="📷" onClick={onScreenshot} />
+            <BotaoIcone title="Tela cheia" icon="⛶" onClick={onFullscreen} />
+          </div>
+
           {/* ── Navegação ── */}
           <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-            <BotaoNav label="🗺️ Brasil" onClick={() => onFlyTo("brasil")} />
-            <BotaoNav label="🌎 Sul América" onClick={() => onFlyTo("sul_america")} />
+            <BotaoNav label="Brasil" onClick={() => onFlyTo("brasil")} />
+            <BotaoNav label="Sul América" onClick={() => onFlyTo("sul_america")} />
           </div>
 
         </div>
       )}
 
-      {/* Botão de toggle */}
       <button
         onClick={() => setAberto(v => !v)}
         onMouseEnter={() => setBtnHover(true)}

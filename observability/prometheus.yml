@@ -23,12 +23,6 @@ scrape_configs:
       - targets: ["postgres_exporter:9187"]
     scrape_interval: 30s
 
-  # ─── Redis ────────────────────────────────────────────────────────────────
-  - job_name: "redis"
-    static_configs:
-      - targets: ["redis_exporter:9121"]
-    scrape_interval: 15s
-
   # ─── PgBouncer ────────────────────────────────────────────────────────────
   - job_name: "pgbouncer"
     static_configs:

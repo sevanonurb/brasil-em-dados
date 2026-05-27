@@ -1,15 +1,16 @@
 /**
  * main.jsx — Painel Geoespacial do Brasil
  *
- * Deck.gl v9 + MapLibre GL JS — arquitetura dual:
- * - MapLibre: basemap contextual
- * - Deck.gl: camadas temáticas analíticas sobre o basemap
+ * Deck.gl v9 + MapLibre GL JS — arquitetura integrada:
+ * MapboxOverlay (interleaved) renderiza deck.gl DENTRO do MapLibre.
+ * Basemap vetorial com camadas togáveis (ruas, labels) acima do choropleth.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import maplibregl from "maplibre-gl";
-import { Deck, FlyToInterpolator } from "@deck.gl/core";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { Deck } from "@deck.gl/core";
 import { MVTLayer } from "@deck.gl/geo-layers";
 import { Protocol } from "pmtiles";
 
@@ -20,6 +21,7 @@ import {
   NIVEL_METADATA,
 } from "./layers/semantic_zoom.js";
 import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
+import { METRICA_LABEL_CURTO, formatarParaTooltip } from "./utils/metricas.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { PainelVisual } from "./components/PainelVisual.jsx";
@@ -29,6 +31,82 @@ import { BuscaMunicipio } from "./components/BuscaMunicipio.jsx";
 // Registra protocolo PMTiles no MapLibre
 const pmtilesProtocol = new Protocol();
 maplibregl.addProtocol("pmtiles", pmtilesProtocol.tile);
+
+// ── Estilo vetorial do basemap ────────────────────────────────────────────────
+// CARTO vector tiles (OpenMapTiles schema) — camadas individuais togáveis.
+// O choropleth deck.gl é intercalado ANTES da camada "roads" via MapboxOverlay.
+const BASEMAP_STYLE = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "vector",
+      tiles: [
+        "https://tiles-a.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt",
+        "https://tiles-b.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt",
+        "https://tiles-c.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt",
+      ],
+      maxzoom: 14,
+      attribution: "© CARTO / OSM contributors",
+    },
+    satelite: {
+      type: "raster",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256,
+      attribution: "© Esri",
+    },
+  },
+  glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+  layers: [
+    // ── Fundo ──
+    { id: "background", type: "background", paint: { "background-color": "#0d0f16" } },
+    // ── Satélite (off por padrão) ──
+    { id: "satelite", type: "raster", source: "satelite",
+      layout: { visibility: "none" },
+      paint: { "raster-opacity": 0.4 },
+    },
+    // ── Terra/água sutis ──
+    { id: "water", type: "fill", source: "carto", "source-layer": "water",
+      paint: { "fill-color": "#14171f" },
+    },
+    { id: "landcover", type: "fill", source: "carto", "source-layer": "landcover",
+      paint: { "fill-color": "#181c28", "fill-opacity": 0.3 },
+    },
+    // ──────────────────────────────────────────────────────────────────────────
+    // MARCADOR: deck.gl insere o choropleth AQUI (beforeId: "roads")
+    // ──────────────────────────────────────────────────────────────────────────
+    // ── Ruas (off por padrão) ──
+    { id: "roads", type: "line", source: "carto", "source-layer": "transportation",
+      layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#3a4050", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.3, 10, 0.8, 14, 1.5], "line-opacity": 0.7 },
+      filter: ["all", ["!=", "class", "rail"]],
+    },
+    { id: "roads-major", type: "line", source: "carto", "source-layer": "transportation",
+      layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#505870", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 10, 1.5, 14, 3], "line-opacity": 0.8 },
+      filter: ["in", "class", "motorway", "trunk", "primary"],
+    },
+    // ── Labels (off por padrão) ──
+    { id: "place-labels", type: "symbol", source: "carto", "source-layer": "place",
+      layout: {
+        visibility: "none",
+        "text-field": "{name}", "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 8, 13, 12, 16],
+        "text-font": ["Open Sans Bold"],
+        "text-anchor": "center", "text-max-width": 8,
+      },
+      paint: { "text-color": "#c0c8d8", "text-halo-color": "#0d0f16", "text-halo-width": 1.5 },
+    },
+    { id: "road-labels", type: "symbol", source: "carto", "source-layer": "transportation_name",
+      layout: {
+        visibility: "none",
+        "text-field": "{name}", "text-size": ["interpolate", ["linear"], ["zoom"], 10, 9, 14, 12],
+        "text-font": ["Open Sans Regular"],
+        "symbol-placement": "line", "text-max-angle": 30,
+      },
+      paint: { "text-color": "#8090a0", "text-halo-color": "#0d0f16", "text-halo-width": 1 },
+      minzoom: 12,
+    },
+  ],
+};
 
 // Intervalos realistas por métrica × nível semântico
 // Derivados dos dados reais: SIM 2023, 5570 municípios, 27 UFs
@@ -670,219 +748,28 @@ function useAnosDisponiveis() {
 }
 
 // Retorna uma função getTooltip que mostra o indicador atualmente selecionado.
-// Recebe metrica e cid10 como closure para exibir label correto.
 function makeTooltip(metrica, cid10) {
-  const LABEL = {
-    taxa_mortalidade:            cid10 ? (CID10_LABELS[cid10] ?? `Mortalidade CID-${cid10}`) : "Mortalidade",
-    taxa_homicidio:              "Homicídio",
-    mortalidade_infantil:        "Mort. infantil",
-    pib_per_capita:              "PIB per capita",
-    receita_per_capita:          "Receita per capita",
-    despesa_saude_per_capita:    "Gasto em saúde",
-    despesa_educacao_per_capita: "Gasto em educação",
-    densidade_pop:               "Densidade demográfica",
-    acesso_agua:                 "Acesso à água",
-    acesso_esgoto:               "Acesso ao esgoto",
-    coleta_lixo:                 "Coleta de lixo",
-    taxa_natalidade:             "Taxa de natalidade",
-    leitos_sus_por_1k:           "Leitos SUS",
-    medicos_por_10k:             "Médicos",
-    ideb_anos_iniciais:          "IDEB anos iniciais",
-    ideb_anos_finais:            "IDEB anos finais",
-    taxa_alfabetizacao:          "Taxa de alfabetização",
-    taxa_envelhecimento:         "Índice de envelhecimento",
-    razao_sexo:                  "Razão de sexo",
-    media_moradores:             "Média de moradores",
-    domicilios_internet:         "Domicílios c/ internet",
-    pop_favelas_pct:             "Pop. em favelas",
-    renda_domiciliar_per_capita: "Renda dom. per capita",
-    renda_domiciliar_mediana_pc: "Renda dom. mediana pc",
-    renda_media_trabalho:        "Renda média trabalho",
-    renda_mediana_trabalho:      "Renda mediana trabalho",
-    media_anos_estudo:           "Média anos de estudo",
-    pct_superior_completo:       "Superior completo",
-    taxa_deficiencia:            "Taxa de deficiência",
-    taxa_ocupacao:               "Nível de ocupação",
-    idade_mediana:               "Idade mediana",
-    pct_pib_agropecuaria:        "Agropecuária / PIB",
-    pct_pib_industria:           "Indústria / PIB",
-    pct_pib_servicos:            "Serviços / PIB",
-    vbp_agricola_per_capita:     "VBP agrícola per capita",
-    vbp_pecuaria_per_capita:     "VBP pecuário per capita",
-    divida_rcl:                  "Dívida / RCL",
-    despesa_pessoal_rcl:         "Pessoal / RCL",
-    pct_indigena:                "Pop. indígena",
-    pct_quilombola:              "Pop. quilombola",
-    pct_agrofamiliar:            "Agric. familiar",
-    pct_mecanizado:              "Com tratores",
-    pct_financiamento:           "Com financiamento",
-    empresas_por_1k:             "Empresas / 1k hab.",
-    taxa_migracao:               "Imigração inter-mun.",
-    taxa_escolarizacao_1517:     "Escolarização 15-17",
-    taxa_desemprego:             "Desemprego",
-    taxa_pendular:               "Pendularidade laboral",
-    taxa_informalidade:          "Informalidade",
-    pct_baixa_renda:             "Baixa renda (≤1/2 SM)",
-    pct_renda_trabalho:          "% renda do trabalho",
-    pct_chefia_feminina:         "Chefia feminina",
-    domicilios_maquina_lavar:    "Máquina de lavar",
-    superlotacao_domiciliar:     "Superlotação domiciliar",
-    domicilios_alugados:         "Domicílios alugados",
-    domicilios_monoparentais:    "Domicílios monoparentais",
-    media_filhos_mulher:         "Média filhos/mulher",
-    pct_urbano:                  "Pop. urbana",
-    pct_alvenaria:               "Alvenaria",
-    pct_banheiro_exclusivo:      "Banheiro exclusivo",
-    taxa_nupcialidade:              "Nupcialidade",
-    taxa_divorcialidade:            "Divorcialidade",
-    taxa_separacao:                 "Separação judicial",
-    taxa_obito_fetal:               "Óbito fetal",
-    incidencia_dengue:              "Dengue",
-    incidencia_tuberculose:         "Tuberculose",
-    incidencia_hanseniase:          "Hanseníase",
-    incidencia_leishmaniose:        "Leishmaniose",
-    taxa_internacao_sus:            "Internações SUS",
-    taxa_internacao_cardiovascular: "Internações cardiovasc.",
-    taxa_internacao_respiratoria:   "Internações respirat.",
-    taxa_internacao_mental:         "Internações mental",
-    media_permanencia_sus:          "Permanência hosp.",
-    taxa_aprovacao_ef:              "Aprovação EF",
-    taxa_reprovacao_ef:             "Reprovação EF",
-    taxa_abandono_ef:               "Abandono EF",
-    taxa_aprovacao_em:              "Aprovação EM",
-    taxa_abandono_em:               "Abandono EM",
-    distorcao_idade_serie_ef:       "Distorção EF",
-    distorcao_idade_serie_em:       "Distorção EM",
-    frota_automovel_por_1k:         "Automóveis",
-    frota_moto_por_1k:              "Motocicletas",
-    frota_caminhao_por_1k:          "Caminhões",
-    frota_onibus_por_1k:            "Ônibus",
-    frota_total_por_1k:             "Frota total",
-    rebanho_bovino_por_km2:         "Bovino/km²",
-    rebanho_bovino_por_hab:         "Bovino/hab.",
-    rebanho_suino_por_hab:          "Suíno/hab.",
-    rebanho_ovino_por_hab:          "Ovino/hab.",
-    rebanho_caprino_por_hab:        "Caprino/hab.",
-    rebanho_galinaceos_por_hab:     "Galináceos/hab.",
-    rebanho_equino_por_hab:         "Equino/hab.",
-    producao_leite_por_vaca:        "Leite/vaca",
-    producao_leite_per_capita:      "Leite per capita",
-    producao_mel_por_colmeia:       "Mel/colmeia",
-    producao_mel_kg:                "Mel (kg)",
-    producao_ovos_total:            "Ovos (mil dúzias)",
-    producao_ovos_per_capita:       "Ovos/hab.",
-    pct_geladeira:                  "Geladeira",
-    pct_ar_condicionado:            "Ar-condicionado",
-    pct_freezer:                    "Freezer",
-    pct_tv:                         "Televisão",
-    pct_automovel_domicilio:        "Automóvel (domicílio)",
-    pct_motocicleta_domicilio:      "Motocicleta (domicílio)",
-    pct_microondas:                 "Microondas",
-    pct_computador:                 "Computador",
+  const TOOLTIP_STYLE = {
+    backgroundColor: "#1a202c",
+    color: "#e2e8f0",
+    border: "1px solid #4a5568",
+    borderRadius: "6px",
+    padding: "8px 12px",
+    fontSize: "12px",
+    maxWidth: "240px",
   };
-
-  const METRICAS_REAIS = new Set([
-    "pib_per_capita", "receita_per_capita",
-    "despesa_saude_per_capita", "despesa_educacao_per_capita",
-    "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
-    "renda_media_trabalho", "renda_mediana_trabalho",
-    "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
-  ]);
-
-  const METRICAS_PERCENT = new Set([
-    "acesso_agua", "acesso_esgoto", "coleta_lixo",
-    "taxa_alfabetizacao", "domicilios_internet", "pop_favelas_pct",
-    "divida_rcl", "despesa_pessoal_rcl",
-    "pct_superior_completo", "taxa_deficiencia",
-    "taxa_ocupacao",
-    "pct_pib_agropecuaria", "pct_pib_industria", "pct_pib_servicos",
-    "pct_indigena", "pct_quilombola", "pct_agrofamiliar",
-    "pct_mecanizado", "pct_financiamento",
-    "taxa_migracao", "taxa_escolarizacao_1517",
-    "taxa_desemprego", "taxa_pendular", "taxa_informalidade",
-    "pct_baixa_renda", "pct_renda_trabalho",
-    "pct_chefia_feminina", "domicilios_maquina_lavar", "superlotacao_domiciliar",
-    "domicilios_alugados", "domicilios_monoparentais",
-    "pct_urbano", "pct_alvenaria", "pct_banheiro_exclusivo",
-    "taxa_aprovacao_ef", "taxa_reprovacao_ef", "taxa_abandono_ef",
-    "taxa_aprovacao_em", "taxa_abandono_em",
-    "distorcao_idade_serie_ef", "distorcao_idade_serie_em",
-    "pct_geladeira", "pct_ar_condicionado", "pct_freezer", "pct_tv",
-    "pct_automovel_domicilio", "pct_motocicleta_domicilio",
-    "pct_microondas", "pct_computador",
-  ]);
 
   return ({ object }) => {
     if (!object?.properties) return null;
     const p = object.properties;
     const nome = p.nome_municipio || p.nome || p.sigla || `Setor ${p.cod_setor}`;
-    const label = LABEL[metrica] || metrica;
-    const valor = p.valor_metrica;
 
-    let formatado;
-    if (valor == null || valor === "") {
-      formatado = "<i style='color:#718096'>sem dados</i>";
-    } else {
-      const n = Number(valor);
-      if (!isFinite(n)) {
-        formatado = "<i style='color:#718096'>sem dados</i>";
-      } else if (METRICAS_REAIS.has(metrica)) {
-        formatado = `<b>R$\u00a0${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b>`;
-      } else if (metrica === "densidade_pop") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> hab/km²`;
-      } else if (METRICAS_PERCENT.has(metrica)) {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>%`;
-      } else if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b>`;
-      } else if (metrica === "leitos_sus_por_1k") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
-      } else if (metrica === "medicos_por_10k") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/10k hab.`;
-      } else if (metrica === "mortalidade_infantil") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc.`;
-      } else if (["taxa_natalidade", "taxa_nupcialidade", "taxa_divorcialidade",
-                   "taxa_separacao", "taxa_internacao_sus",
-                   "frota_automovel_por_1k", "frota_moto_por_1k", "frota_caminhao_por_1k",
-                   "frota_onibus_por_1k", "frota_total_por_1k"].includes(metrica)) {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b>/1k hab.`;
-      } else if (["incidencia_dengue", "incidencia_tuberculose", "incidencia_hanseniase",
-                  "incidencia_leishmaniose", "taxa_internacao_cardiovascular",
-                  "taxa_internacao_respiratoria", "taxa_internacao_mental"].includes(metrica)) {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k hab.`;
-      } else if (metrica === "taxa_obito_fetal") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/1k nasc. vivos`;
-      } else if (metrica === "media_permanencia_sus") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> dias`;
-      } else if (metrica === "producao_leite_por_vaca") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> L/vaca`;
-      } else if (metrica === "producao_leite_per_capita") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> L/hab.`;
-      } else if (metrica === "producao_mel_por_colmeia") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> kg/colmeia`;
-      } else if (metrica === "producao_mel_kg") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> kg`;
-      } else if (metrica === "producao_ovos_total") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> mil dúz.`;
-      } else if (metrica === "producao_ovos_per_capita") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b> dúz./hab.`;
-      } else if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_km2")) {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</b> cab/km²`;
-      } else if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_hab")) {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</b> cab/hab.`;
-      } else if (metrica === "razao_sexo") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> h/100 mul.`;
-      } else if (metrica === "media_moradores") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b> mor./dom.`;
-      } else if (metrica === "taxa_envelhecimento") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>`;
-      } else if (metrica === "media_anos_estudo") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b> anos`;
-      } else if (metrica === "idade_mediana") {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}</b> anos`;
-      } else {
-        formatado = `<b>${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>/100k`;
-      }
+    let label = METRICA_LABEL_CURTO[metrica] || metrica;
+    if (metrica === "taxa_mortalidade" && cid10) {
+      label = CID10_LABELS[cid10] ?? `Mortalidade CID-${cid10}`;
     }
+
+    const formatado = formatarParaTooltip(p.valor_metrica, metrica);
 
     const pop = p.populacao_2022 ?? p.populacao_total;
     const popLine = pop != null
@@ -891,15 +778,7 @@ function makeTooltip(metrica, cid10) {
 
     return {
       html: `<strong>${nome}</strong><br/>${label}: ${formatado}${popLine}`,
-      style: {
-        backgroundColor: "#1a202c",
-        color: "#e2e8f0",
-        border: "1px solid #4a5568",
-        borderRadius: "6px",
-        padding: "8px 12px",
-        fontSize: "12px",
-        maxWidth: "240px",
-      },
+      style: TOOLTIP_STYLE,
     };
   };
 }
@@ -976,7 +855,8 @@ function quantileNormalizar(v, sortedValues) {
 export default function App() {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const deckRef = useRef(null);
+  const overlayRef = useRef(null);   // MapboxOverlay (interleaved)
+  const deckCompareRef = useRef(null);
 
   const [viewState, setViewState] = useState(INITIAL_VIEW);
   const [featureSelecionada, setFeatureSelecionada] = useState(null);
@@ -998,14 +878,53 @@ export default function App() {
 
   // Controles visuais — não afetam dados, apenas renderização
   const [visual, setVisual] = useState({
-    opacidadeOverlay: 1.0,      // 0–1: opacidade das camadas coropléticas
-    bordurasMunicipios: true,   // mostrar bordas dos municípios
-    bordurasEstados: true,      // mostrar bordas dos estados/UFs
-    opacidadeBasemap: null,     // null = zoom-based automático; 0–1 = manual
-    mostrarSulAmerica: false,   // exibe basemap visível em todos os zooms
+    opacidadeOverlay: 1.0,        // 0–1: opacidade das camadas coropléticas
+    bordurasMunicipios: true,     // mostrar bordas dos municípios
+    bordurasEstados: true,        // mostrar bordas dos estados/UFs
+    opacidadeBasemap: null,       // null = zoom-based automático; 0–1 = manual
+    mostrarSulAmerica: false,     // exibe basemap visível em todos os zooms
+    mostrarRuas: false,           // camada de ruas/estradas sobreposta
+    opacidadeRuas: 0.5,           // opacidade da camada de ruas
+    mostrarSatelite: false,       // imagem de satélite por baixo
+    opacidadeSatelite: 0.4,       // opacidade do satélite
+    mostrarNomes: false,          // rótulos de cidades
+    mostrarCoordenadas: false,    // lat/lon ao mover o mouse
   });
   const updateVisual = useCallback((key, val) => {
     setVisual(prev => ({ ...prev, [key]: val }));
+  }, []);
+
+  // Comparação lado-a-lado
+  const [comparacao, setComparacao] = useState({
+    ativo: false,
+    metrica: "pib_per_capita",
+    ano: 2022,
+  });
+  const onComparacaoUpdate = useCallback((key, val) => {
+    setComparacao(prev => ({ ...prev, [key]: val }));
+  }, []);
+
+  // Coordenadas do mouse
+  const [mouseCoords, setMouseCoords] = useState(null);
+
+  // Ferramentas — screenshot e tela cheia
+  const onScreenshot = useCallback(() => {
+    const canvas = mapContainerRef.current?.querySelector("canvas") ?? document.querySelector("canvas");
+    if (!canvas) return;
+    try {
+      const link = document.createElement("a");
+      link.download = `brasil-em-dados-${Date.now()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (_) { /* canvas tainted — CORS */ }
+  }, []);
+
+  const onFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
   }, []);
   const nivelAtual = nivelForcado ?? getNivelSemantico(viewState.zoom);
 
@@ -1030,37 +949,6 @@ export default function App() {
     const range = ranges[level] ?? ranges.ESTADUAL;
     setEstatisticas(range);
   }, [filtros.metrica, nivelAtual, filtros.cid10_capitulo]);
-
-  // Atualiza opacidade do mapa base (MapLibre) ao mudar controles visuais.
-  // Separa em effect próprio para não depender do ciclo das camadas Deck.gl.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const apply = () => {
-      if (!map.getLayer("osm-tiles")) return;
-      const { opacidadeBasemap, mostrarSulAmerica } = visual;
-      let expr;
-      if (opacidadeBasemap !== null) {
-        // Controle manual: valor fixo ignorando o zoom
-        expr = opacidadeBasemap;
-      } else if (mostrarSulAmerica) {
-        // Modo Sul América: basemap visível mesmo em zooms baixos
-        expr = ["interpolate", ["linear"], ["zoom"], 2, 0.42, 6, 0.35, 10, 0.35, 14, 0.6];
-      } else {
-        // Auto: aparece gradualmente a partir do zoom 8 (comportamento padrão)
-        expr = ["interpolate", ["linear"], ["zoom"], 8, 0, 10, 0.35, 14, 0.6];
-      }
-      map.setPaintProperty("osm-tiles", "raster-opacity", expr);
-    };
-
-    if (map.getLayer("osm-tiles")) {
-      apply();
-    } else {
-      // Aguarda o estilo carregar antes de atualizar (apenas no primeiro render)
-      map.once("idle", apply);
-    }
-  }, [visual.opacidadeBasemap, visual.mostrarSulAmerica]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reseta a normalização adaptativa ao trocar contexto (métrica, ano, UF, nível)
   useEffect(() => {
@@ -1103,95 +991,173 @@ export default function App() {
 
   // Animação de flyTo quando flyTarget muda
   useEffect(() => {
-    if (!flyTarget || !deckRef.current) return;
-    deckRef.current.setProps({
-      initialViewState: {
-        ...flyTarget,
-        transitionDuration: 1400,
-        transitionInterpolator: new FlyToInterpolator({ speed: 1.8 }),
-      },
+    if (!flyTarget || !mapRef.current) return;
+    mapRef.current.flyTo({
+      center: [flyTarget.longitude, flyTarget.latitude],
+      zoom: flyTarget.zoom ?? 4,
+      pitch: flyTarget.pitch ?? 0,
+      bearing: flyTarget.bearing ?? 0,
+      duration: flyTarget.transitionDuration ?? 1400,
     });
     setFlyTarget(null);
   }, [flyTarget]);
 
-  // Inicia MapLibre + Deck.gl uma única vez
+  // Inicia MapLibre + MapboxOverlay (interleaved) uma única vez
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {},
-        layers: [
-          {
-            id: "background",
-            type: "background",
-            paint: { "background-color": "#1a1f2e" },
-          },
-        ],
-      },
+      style: BASEMAP_STYLE,
       center: [INITIAL_VIEW.longitude, INITIAL_VIEW.latitude],
       zoom: INITIAL_VIEW.zoom,
-      interactive: false, // Deck.gl controla a interação
     });
 
-    // Adiciona basemap OSM quando zoom >= 9 (nível municipal)
-    map.on("load", () => {
-      map.addSource("osm", {
-        type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        attribution: "© OpenStreetMap",
-      });
-      map.addLayer({
-        id: "osm-tiles",
-        type: "raster",
-        source: "osm",
-        paint: {
-          "raster-opacity": [
-            "interpolate", ["linear"], ["zoom"],
-            8, 0, 10, 0.35, 14, 0.6,
-          ],
-        },
-      });
+    const overlay = new MapboxOverlay({
+      interleaved: true,
+      layers: [],
+      getTooltip: () => null,
     });
+    map.addControl(overlay);
 
     mapRef.current = map;
+    overlayRef.current = overlay;
 
-    const deck = new Deck({
-      canvas: "deck-canvas",
-      width: "100%",
-      height: "100%",
-      initialViewState: INITIAL_VIEW,
-      controller: true,
-
-      onViewStateChange: ({ viewState: vs }) => {
-        setViewState(vs);
-        map.jumpTo({
-          center: [vs.longitude, vs.latitude],
-          zoom: vs.zoom,
-          bearing: vs.bearing,
-          pitch: vs.pitch,
-        });
-      },
-      // getTooltip é atualizado via setProps no efeito de camadas
-      // para sempre refletir o indicador e filtros atuais.
+    // Captura viewState do MapLibre → React
+    map.on("move", () => {
+      const c = map.getCenter();
+      setViewState({
+        longitude: c.lng,
+        latitude: c.lat,
+        zoom: map.getZoom(),
+        pitch: map.getPitch(),
+        bearing: map.getBearing(),
+      });
+    });
+    map.on("mousemove", (e) => {
+      setMouseCoords({ lat: e.lngLat.lat, lon: e.lngLat.lng });
     });
 
-    deckRef.current = deck;
-
     return () => {
-      deck.finalize();
+      map.removeControl(overlay);
       map.remove();
       mapRef.current = null;
-      deckRef.current = null;
+      overlayRef.current = null;
     };
   }, []);
 
+  // ── Visibilidade de camadas vetoriais do basemap ───────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      // Ruas
+      const ruasVis = visual.mostrarRuas ? "visible" : "none";
+      map.setLayoutProperty("roads", "visibility", ruasVis);
+      map.setLayoutProperty("roads-major", "visibility", ruasVis);
+      if (visual.mostrarRuas) {
+        map.setPaintProperty("roads", "line-opacity", visual.opacidadeRuas ?? 0.7);
+        map.setPaintProperty("roads-major", "line-opacity", visual.opacidadeRuas ?? 0.8);
+      }
+      // Nomes de cidades e ruas
+      const labelsVis = visual.mostrarNomes ? "visible" : "none";
+      map.setLayoutProperty("place-labels", "visibility", labelsVis);
+      map.setLayoutProperty("road-labels", "visibility", visual.mostrarRuas && visual.mostrarNomes ? "visible" : "none");
+      // Satélite
+      map.setLayoutProperty("satelite", "visibility", visual.mostrarSatelite ? "visible" : "none");
+      if (visual.mostrarSatelite) {
+        map.setPaintProperty("satelite", "raster-opacity", visual.opacidadeSatelite ?? 0.4);
+      }
+      // Opacidade do basemap (água, terreno)
+      const baseOp = visual.opacidadeBasemap ?? 0.3;
+      map.setPaintProperty("water", "fill-opacity", baseOp);
+      map.setPaintProperty("landcover", "fill-opacity", baseOp * 0.3);
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [visual.mostrarRuas, visual.opacidadeRuas, visual.mostrarNomes, visual.mostrarSatelite, visual.opacidadeSatelite, visual.opacidadeBasemap]);
+
+  // ── Deck.gl de comparação (lado direito do split) ────────────────────────────
+  const compareCanvasRef = useCallback((el) => {
+    if (el && !deckCompareRef.current) {
+      deckCompareRef.current = new Deck({
+        canvas: el,
+        width: "100%",
+        height: "100%",
+        initialViewState: viewState,
+        controller: false,
+      });
+    }
+  }, []);
+
+  // Cleanup do deck de comparação quando desativado
+  useEffect(() => {
+    if (!comparacao.ativo && deckCompareRef.current) {
+      deckCompareRef.current.finalize();
+      deckCompareRef.current = null;
+    }
+  }, [comparacao.ativo]);
+
+  // Sincroniza viewport do deck de comparação
+  useEffect(() => {
+    if (deckCompareRef.current) {
+      deckCompareRef.current.setProps({ initialViewState: viewState });
+    }
+  }, [viewState]);
+
+  // Camadas do deck de comparação
+  useEffect(() => {
+    if (!deckCompareRef.current || !comparacao.ativo) return;
+
+    const compParams = { ...serverParams, metrica: comparacao.metrica, ano: comparacao.ano };
+    const compTileUrl = getTileUrl(nivelAtual === "GEOLOCALIZACAO" ? "MUNICIPAL" : nivelAtual, compParams);
+    const compInvertida = METRICAS_INVERTIDAS.has(comparacao.metrica);
+    const compRange = METRICAS_RANGES[comparacao.metrica]?.[nivelAtual === "GEOLOCALIZACAO" ? "MUNICIPAL" : nivelAtual] ?? { min: 0, max: 100 };
+
+    const compGetColor = (f) => {
+      const raw = f.properties?.valor_metrica;
+      if (raw == null || raw === "") return [55, 60, 75, 160];
+      const val = Number(raw);
+      if (!isFinite(val)) return [55, 60, 75, 160];
+      return getCorCoroplética(normalizarValor(val, compRange.min, compRange.max), 220, compInvertida);
+    };
+
+    const layers = [];
+    if (nivelAtual === "NACIONAL") {
+      layers.push(new MVTLayer({
+        id: "compare-ufs", data: compTileUrl, pickable: true, autoHighlight: true,
+        highlightColor: [255, 255, 255, 80],
+        getFillColor: compGetColor,
+        getLineColor: [60, 60, 80, 200], getLineWidth: 1, lineWidthMinPixels: 0.8,
+        updateTriggers: { getFillColor: [comparacao.metrica, comparacao.ano] },
+      }));
+    } else if (nivelAtual === "ESTADUAL") {
+      layers.push(new MVTLayer({
+        id: "compare-municipios", data: compTileUrl, pickable: true, autoHighlight: true,
+        highlightColor: [255, 255, 255, 60],
+        getFillColor: compGetColor,
+        getLineColor: [20, 20, 20, 150], getLineWidth: 0.5, lineWidthMinPixels: 0.3,
+        updateTriggers: { getFillColor: [comparacao.metrica, comparacao.ano] },
+      }));
+    } else {
+      layers.push(new MVTLayer({
+        id: "compare-setores", data: compTileUrl, pickable: true, autoHighlight: true,
+        highlightColor: [255, 255, 255, 60],
+        getFillColor: compGetColor,
+        getLineColor: [20, 20, 20, 120], getLineWidth: 0.3, lineWidthMinPixels: 0.2,
+        updateTriggers: { getFillColor: [comparacao.metrica, comparacao.ano] },
+      }));
+    }
+
+    deckCompareRef.current.setProps({
+      layers,
+      getTooltip: makeTooltip(comparacao.metrica, null),
+    });
+  }, [comparacao, nivelAtual, serverParams]);
+
   // Atualiza camadas quando estado muda
   useEffect(() => {
-    if (!deckRef.current) return;
+    if (!overlayRef.current) return;
 
     const layers = [];
 
@@ -1206,9 +1172,9 @@ export default function App() {
     const setorLineColor = visual.bordurasMunicipios ? [20, 20, 20, 120]    : [0, 0, 0, 0];
     const setorLineWidth = visual.bordurasMunicipios ? 0.3  : 0;
     const setorLineMinPx = visual.bordurasMunicipios ? 0.2  : 0;
-    const ufLineColor    = visual.bordurasEstados    ? [60, 60, 80, 200]    : [0, 0, 0, 0];
-    const ufLineWidth    = visual.bordurasEstados    ? 1    : 0;
-    const ufLineMinPx    = visual.bordurasEstados    ? 0.8  : 0;
+    const ufLineColor    = visual.bordurasEstados    ? [80, 90, 120, 220]   : [0, 0, 0, 0];
+    const ufLineWidth    = visual.bordurasEstados    ? 2    : 0;
+    const ufLineMinPx    = visual.bordurasEstados    ? 1.5  : 0;
 
     // Determina se a escala deve ser invertida (alto=bom → verde no topo)
     const metricaInvertida = METRICAS_INVERTIDAS.has(filtros.metrica);
@@ -1234,22 +1200,21 @@ export default function App() {
       return getCorCoroplética(resolverT(val), 220, metricaInvertida);
     };
 
+    // beforeId: "roads" → deck.gl renderiza ABAIXO das camadas vetoriais de ruas/labels
+    const BEFORE_ID = "roads";
+
+    // ── Camada de dados ativa (choropleth) ──────────────────────────────────────
     if (nivelAtual === "NACIONAL") {
       layers.push(new MVTLayer({
         id: "ufs-layer",
+        beforeId: BEFORE_ID,
         data: getTileUrl("NACIONAL", serverParams),
         opacity: op(0, 6),
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 80],
         onTileLoad: handleTileLoad,
-        getFillColor: (f) => {
-          const raw = f.properties?.valor_metrica;
-          if (raw == null || raw === "") return [55, 60, 75, 160];
-          const val = Number(raw);
-          if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(resolverT(val), 220, metricaInvertida);
-        },
+        getFillColor: getChoroplethColor,
         getLineColor: ufLineColor,
         getLineWidth: ufLineWidth,
         lineWidthMinPixels: ufLineMinPx,
@@ -1265,31 +1230,26 @@ export default function App() {
       if (filtros.cod_uf) {
         layers.push(new MVTLayer({
           id: "ufs-dim-bg",
+          beforeId: BEFORE_ID,
           data: `${import.meta.env.VITE_MARTIN_URL}/tiles_ufs/{z}/{x}/{y}`,
           opacity: 1,
           pickable: false,
           getFillColor: [60, 70, 95, 160],
-          getLineColor: visual.bordurasEstados ? [100, 115, 145, 180] : [0, 0, 0, 0],
-          getLineWidth: ufLineWidth,
-          lineWidthMinPixels: ufLineMinPx,
+          getLineColor: [0, 0, 0, 0],
+          getLineWidth: 0,
         }));
       }
 
       layers.push(new MVTLayer({
         id: "municipios-layer",
+        beforeId: BEFORE_ID,
         data: getTileUrl("ESTADUAL", serverParams),
         opacity: op(5, 12),
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 60],
         onTileLoad: handleTileLoad,
-        getFillColor: (f) => {
-          const raw = f.properties?.valor_metrica;
-          if (raw == null || raw === "") return [55, 60, 75, 160];
-          const val = Number(raw);
-          if (!isFinite(val)) return [55, 60, 75, 160];
-          return getCorCoroplética(resolverT(val), 220, metricaInvertida);
-        },
+        getFillColor: getChoroplethColor,
         getLineColor: munLineColor,
         getLineWidth: munLineWidth,
         lineWidthMinPixels: munLineMinPx,
@@ -1304,6 +1264,7 @@ export default function App() {
     if (nivelAtual === "MUNICIPAL") {
       layers.push(new MVTLayer({
         id: "setores-layer",
+        beforeId: BEFORE_ID,
         data: getTileUrl("MUNICIPAL", serverParams),
         minZoom: 0,
         opacity: op(0, 15),
@@ -1327,6 +1288,7 @@ export default function App() {
     if (nivelAtual === "GEOLOCALIZACAO") {
       layers.push(new MVTLayer({
         id: "cnefe-layer",
+        beforeId: BEFORE_ID,
         data: getTileUrl("GEOLOCALIZACAO", serverParams),
         minZoom: 0,
         opacity: op(0, 22),
@@ -1337,22 +1299,79 @@ export default function App() {
       }));
     }
 
-    deckRef.current.setProps({
+    // ── Bordas persistentes (sobrepostas ao choropleth em qualquer nível) ─────
+    // Bordas de UF: visíveis em todos os níveis (não apenas NACIONAL)
+    if (visual.bordurasEstados && nivelAtual !== "NACIONAL") {
+      layers.push(new MVTLayer({
+        id: "ufs-borders-overlay",
+        beforeId: BEFORE_ID,
+        data: `${import.meta.env.VITE_MARTIN_URL}/tiles_ufs/{z}/{x}/{y}`,
+        pickable: false,
+        getFillColor: [0, 0, 0, 0],
+        getLineColor: ufLineColor,
+        getLineWidth: ufLineWidth,
+        lineWidthMinPixels: ufLineMinPx,
+        updateTriggers: { getLineColor: [visual.bordurasEstados] },
+      }));
+    }
+
+    // Bordas de municípios: visíveis em MUNICIPAL, GEOLOCALIZACAO (não apenas ESTADUAL)
+    if (visual.bordurasMunicipios && (nivelAtual === "MUNICIPAL" || nivelAtual === "GEOLOCALIZACAO")) {
+      layers.push(new MVTLayer({
+        id: "municipios-borders-overlay",
+        beforeId: BEFORE_ID,
+        data: `${import.meta.env.VITE_MARTIN_URL}/tiles_municipios/{z}/{x}/{y}`,
+        pickable: false,
+        getFillColor: [0, 0, 0, 0],
+        getLineColor: munLineColor,
+        getLineWidth: munLineWidth,
+        lineWidthMinPixels: munLineMinPx,
+        updateTriggers: { getLineColor: [visual.bordurasMunicipios] },
+      }));
+    }
+
+    overlayRef.current.setProps({
       layers,
       getTooltip: makeTooltip(filtros.metrica, filtros.cid10_capitulo),
     });
-  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, normSorted, visual, handleTileLoad]);
+  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, normSorted, visual, handleTileLoad, comparacao.ativo]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* Mapa base MapLibre */}
+      {/* Mapa integrado: MapLibre + deck.gl (interleaved) */}
       <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
 
-      {/* Canvas Deck.gl sobreposto */}
-      <canvas
-        id="deck-canvas"
-        style={{ position: "absolute", inset: 0, pointerEvents: "all" }}
-      />
+      {/* Canvas de comparação (lado direito) */}
+      {comparacao.ativo && (
+        <canvas
+          ref={compareCanvasRef}
+          id="deck-compare-canvas"
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "all",
+            clipPath: "inset(0 0 0 50%)",
+          }}
+        />
+      )}
+
+      {/* Divisor vertical do split */}
+      {comparacao.ativo && (
+        <div style={{
+          position: "absolute", top: 0, bottom: 0, left: "50%",
+          width: 2, background: "#e2e8f0", zIndex: 20,
+          pointerEvents: "none", boxShadow: "0 0 8px rgba(0,0,0,0.5)",
+        }}>
+          <div style={{
+            position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
+            background: "rgba(13,15,22,0.9)", border: "1px solid #4a5568",
+            borderRadius: 6, padding: "4px 10px", fontSize: 10, color: "#a0aec0",
+            whiteSpace: "nowrap",
+          }}>
+            {METRICA_LABEL_CURTO[filtros.metrica] ?? filtros.metrica}
+            {" vs "}
+            {METRICA_LABEL_CURTO[comparacao.metrica] ?? comparacao.metrica}
+          </div>
+        </div>
+      )}
 
       {/* Barra de ferramentas superior — busca + navegação */}
       <div style={{
@@ -1396,6 +1415,11 @@ export default function App() {
             setFlyTarget({ latitude: -17, longitude: -57, zoom: 2.5, pitch: 0, bearing: 0, transitionDuration: 1500 });
           }
         }}
+        comparacao={comparacao}
+        onComparacaoUpdate={onComparacaoUpdate}
+        onScreenshot={onScreenshot}
+        onFullscreen={onFullscreen}
+        anosDisponiveis={filtros.anosDisponiveis}
       />
 
       {/* Painel de controles */}
@@ -1436,6 +1460,19 @@ export default function App() {
           filtros={serverParams}
           onClose={() => setFeatureSelecionada(null)}
         />
+      )}
+
+      {/* Coordenadas do mouse */}
+      {visual.mostrarCoordenadas && mouseCoords && (
+        <div style={{
+          position: "absolute", bottom: 56, right: 16, zIndex: 10,
+          background: "rgba(13,15,22,0.88)", border: "1px solid #2d3748",
+          borderRadius: 6, padding: "4px 10px", fontSize: 11,
+          fontFamily: "monospace", color: "#a0aec0", pointerEvents: "none",
+          backdropFilter: "blur(8px)",
+        }}>
+          {mouseCoords.lat.toFixed(5)}, {mouseCoords.lon.toFixed(5)}
+        </div>
       )}
 
       {/* Indicador de nível semântico */}

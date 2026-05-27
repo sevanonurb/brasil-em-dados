@@ -42,7 +42,7 @@ const UFS_BRASIL = [
 ];
 
 // Grupos de métricas para o <select> com <optgroup>
-const GRUPOS_METRICAS = [
+export const GRUPOS_METRICAS = [
   {
     label: "Saúde",
     opcoes: [
@@ -144,8 +144,6 @@ const GRUPOS_METRICAS = [
     opcoes: [
       { value: "taxa_nupcialidade",           label: "Taxa de nupcialidade (casamentos / 1000 hab.)" },
       { value: "taxa_divorcialidade",         label: "Taxa de divorcialidade (divórcios / 1000 hab.)" },
-      { value: "taxa_separacao",              label: "Taxa de separação judicial (/1k hab.)" },
-      { value: "taxa_obito_fetal",            label: "Taxa de óbito fetal (/1k nasc. vivos)" },
     ],
   },
   {
@@ -201,30 +199,16 @@ const GRUPOS_METRICAS = [
       { value: "rebanho_equino_por_hab",      label: "Equinos (cabeças/hab.)" },
     ],
   },
-  {
-    label: "Pecuária — Produção (PPM anual)",
-    opcoes: [
-      { value: "producao_leite_por_vaca",     label: "Produção de leite por vaca (L/vaca)" },
-      { value: "producao_leite_per_capita",   label: "Produção de leite per capita (L/hab.)" },
-      { value: "producao_mel_por_colmeia",    label: "Produção de mel por colmeia (kg/colmeia)" },
-      { value: "producao_mel_kg",             label: "Produção de mel — total (kg)" },
-      { value: "producao_ovos_total",         label: "Produção de ovos — total (mil dúzias)" },
-      { value: "producao_ovos_per_capita",    label: "Produção de ovos per capita (dúzias/hab.)" },
-    ],
-  },
-  {
-    label: "Equipamentos Domésticos (Censo 2022)",
-    opcoes: [
-      { value: "pct_geladeira",               label: "Domicílios com geladeira (%)" },
-      { value: "pct_ar_condicionado",         label: "Domicílios com ar-condicionado (%)" },
-      { value: "pct_freezer",                 label: "Domicílios com freezer (%)" },
-      { value: "pct_tv",                      label: "Domicílios com televisão (%)" },
-      { value: "pct_automovel_domicilio",     label: "Domicílios com automóvel (%)" },
-      { value: "pct_motocicleta_domicilio",   label: "Domicílios com motocicleta (%)" },
-      { value: "pct_microondas",              label: "Domicílios com microondas (%)" },
-      { value: "pct_computador",              label: "Domicílios com computador (%)" },
-    ],
-  },
+  // Pecuária — Produção: dados ainda não carregados (T74 SIDRA intermitente)
+  // {
+  //   label: "Pecuária — Produção (PPM anual)",
+  //   opcoes: producao_leite_por_vaca, producao_leite_per_capita, producao_mel_*, producao_ovos_*
+  // },
+  // Equipamentos Domésticos: dados ainda não carregados (load_censo_equipamentos.py pendente)
+  // {
+  //   label: "Equipamentos Domésticos (Censo 2022)",
+  //   opcoes: pct_geladeira, pct_ar_condicionado, pct_freezer, pct_tv, etc.
+  // },
   {
     label: "Demográfico (Censo 2022)",
     opcoes: [

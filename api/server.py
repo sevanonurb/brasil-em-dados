@@ -101,9 +101,9 @@ FALLBACK = {
     "pct_urbano":                  [2022],
     "pct_alvenaria":               [2022],
     "pct_banheiro_exclusivo":      [2022],
-    # Registro Civil — Nupcialidade e Divorcialidade (anual)
-    "taxa_nupcialidade":           [2024, 2023, 2022, 2021, 2020, 2019, 2018],
-    "taxa_divorcialidade":         [2024, 2023, 2022, 2021, 2020, 2019, 2018],
+    # Registro Civil — Nupcialidade e Divorcialidade (dados carregados: 2023)
+    "taxa_nupcialidade":           [2023],
+    "taxa_divorcialidade":         [2023],
 }
 
 
@@ -230,21 +230,9 @@ def query_anos():
         "pct_urbano":                  [2022],
         "pct_alvenaria":               [2022],
         "pct_banheiro_exclusivo":      [2022],
-        # Registro Civil — Nupcialidade e Divorcialidade (anual)
-        "taxa_nupcialidade":           anos_metricas.get("taxa_nupcialidade",   [2024, 2023, 2022]),
-        "taxa_divorcialidade":         anos_metricas.get("taxa_divorcialidade", [2024, 2023, 2022]),
-        # Registro Civil — Separações e Óbitos Fetais (anual)
-        "taxa_separacao":              anos_metricas.get("taxa_separacao",      [2024, 2023, 2022]),
-        "taxa_obito_fetal":            anos_metricas.get("taxa_obito_fetal",    [2023, 2022, 2021]),
-        # Equipamentos Domésticos — Censo 2022 (estático)
-        "pct_geladeira":               [2022],
-        "pct_ar_condicionado":         [2022],
-        "pct_freezer":                 [2022],
-        "pct_tv":                      [2022],
-        "pct_automovel_domicilio":     [2022],
-        "pct_motocicleta_domicilio":   [2022],
-        "pct_microondas":              [2022],
-        "pct_computador":              [2022],
+        # Registro Civil — Nupcialidade e Divorcialidade (dados carregados: 2023)
+        "taxa_nupcialidade":           anos_metricas.get("taxa_nupcialidade",   [2023]),
+        "taxa_divorcialidade":         anos_metricas.get("taxa_divorcialidade", [2023]),
         # PPM — Rebanhos (anual)
         "rebanho_bovino_por_km2":      anos_metricas.get("rebanho_bovino_por_km2",     [2023, 2022, 2021]),
         "rebanho_bovino_por_hab":      anos_metricas.get("rebanho_bovino_por_hab",     [2023, 2022, 2021]),
@@ -253,13 +241,7 @@ def query_anos():
         "rebanho_ovino_por_hab":       anos_metricas.get("rebanho_ovino_por_hab",      [2023, 2022, 2021]),
         "rebanho_caprino_por_hab":     anos_metricas.get("rebanho_caprino_por_hab",    [2023, 2022, 2021]),
         "rebanho_galinaceos_por_hab":  anos_metricas.get("rebanho_galinaceos_por_hab", [2023, 2022, 2021]),
-        # PPM — Produção Pecuária (anual)
-        "producao_leite_por_vaca":     anos_metricas.get("producao_leite_por_vaca",    [2023, 2022, 2021]),
-        "producao_leite_per_capita":   anos_metricas.get("producao_leite_per_capita",  [2023, 2022, 2021]),
-        "producao_mel_por_colmeia":    anos_metricas.get("producao_mel_por_colmeia",   [2023, 2022, 2021]),
-        "producao_mel_kg":             anos_metricas.get("producao_mel_kg",            [2023, 2022, 2021]),
-        "producao_ovos_total":         anos_metricas.get("producao_ovos_total",        [2023, 2022, 2021]),
-        "producao_ovos_per_capita":    anos_metricas.get("producao_ovos_per_capita",   [2023, 2022, 2021]),
+        # PPM — Produção Pecuária: dados pendentes (T74 SIDRA intermitente)
         # SINAN — Epidemiologia (anual)
         "incidencia_dengue":           anos_metricas.get("incidencia_dengue",          [2023, 2022, 2021]),
         "incidencia_tuberculose":      anos_metricas.get("incidencia_tuberculose",     [2023, 2022, 2021]),
@@ -279,12 +261,12 @@ def query_anos():
         "taxa_abandono_em":            anos_metricas.get("taxa_abandono_em",           [2024, 2023, 2022]),
         "distorcao_idade_serie_ef":    anos_metricas.get("distorcao_idade_serie_ef",   [2024, 2023, 2022]),
         "distorcao_idade_serie_em":    anos_metricas.get("distorcao_idade_serie_em",   [2024, 2023, 2022]),
-        # SENATRAN — Frota Veicular (anual)
-        "frota_automovel_por_1k":      anos_metricas.get("frota_automovel_por_1k",    [2024, 2023, 2022]),
-        "frota_moto_por_1k":           anos_metricas.get("frota_moto_por_1k",         [2024, 2023, 2022]),
-        "frota_caminhao_por_1k":       anos_metricas.get("frota_caminhao_por_1k",     [2024, 2023, 2022]),
-        "frota_onibus_por_1k":         anos_metricas.get("frota_onibus_por_1k",       [2024, 2023, 2022]),
-        "frota_total_por_1k":          anos_metricas.get("frota_total_por_1k",        [2024, 2023, 2022]),
+        # SENATRAN — Frota Veicular (dados carregados: 2020-2022)
+        "frota_automovel_por_1k":      anos_metricas.get("frota_automovel_por_1k",    [2022, 2021, 2020]),
+        "frota_moto_por_1k":           anos_metricas.get("frota_moto_por_1k",         [2022, 2021, 2020]),
+        "frota_caminhao_por_1k":       anos_metricas.get("frota_caminhao_por_1k",     [2022, 2021, 2020]),
+        "frota_onibus_por_1k":         anos_metricas.get("frota_onibus_por_1k",       [2022, 2021, 2020]),
+        "frota_total_por_1k":          anos_metricas.get("frota_total_por_1k",        [2022, 2021, 2020]),
     }
 
 
@@ -321,6 +303,14 @@ def query_municipios() -> list:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
+
     def do_GET(self):
         if self.path in ("/anos", "/anos/"):
             try:
@@ -354,6 +344,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(exc)}).encode())
+        elif self.path in ("/health", "/health/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"ok")
         else:
             self.send_response(404)
             self.end_headers()

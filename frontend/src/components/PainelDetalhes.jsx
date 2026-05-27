@@ -4,172 +4,15 @@
  */
 
 import { CID10_LABELS } from "../filters/cross_filter.js";
+import { METRICA_LABEL_CURTO, formatarMetrica } from "../utils/metricas.js";
 
 /**
- *
  * Campos disponíveis nos tiles (source-of-truth):
  *   UF (NACIONAL):    cod_uf, sigla, nome, regiao, populacao_total,
  *                     pib_estadual, receita_estadual_total, transferencias_sus_total, valor_metrica
  *   Município (ESTADUAL): cod_ibge_7, cod_uf, nome_municipio, populacao_2022,
  *                     transferencias_sus, valor_metrica
  */
-
-
-const METRICA_LABEL = {
-  taxa_mortalidade:                  "Taxa de mortalidade",
-  taxa_homicidio:                    "Taxa de homicídio",
-  mortalidade_infantil:              "Mortalidade infantil",
-  pib_per_capita:                    "PIB per capita",
-  receita_per_capita:                "Receita municipal per capita",
-  despesa_saude_per_capita:          "Gasto em saúde per capita",
-  despesa_educacao_per_capita:       "Gasto em educação per capita",
-  densidade_pop:                     "Densidade demográfica",
-  acesso_agua:                       "Água encanada",
-  acesso_esgoto:                     "Esgoto (rede)",
-  coleta_lixo:                       "Coleta de lixo",
-  taxa_natalidade:                   "Taxa de natalidade",
-  leitos_sus_por_1k:                 "Leitos SUS",
-  medicos_por_10k:                   "Médicos",
-  ideb_anos_iniciais:                "IDEB anos iniciais",
-  ideb_anos_finais:                  "IDEB anos finais",
-  taxa_nupcialidade:                 "Taxa de nupcialidade",
-  taxa_divorcialidade:               "Taxa de divorcialidade",
-  taxa_separacao:                    "Taxa de separação judicial",
-  taxa_obito_fetal:                  "Taxa de óbito fetal",
-  incidencia_dengue:                 "Incidência de dengue",
-  incidencia_tuberculose:            "Incidência de tuberculose",
-  incidencia_hanseniase:             "Incidência de hanseníase",
-  incidencia_leishmaniose:           "Incidência de leishmaniose",
-  taxa_internacao_sus:               "Internações SUS",
-  taxa_internacao_cardiovascular:    "Internações cardiovasculares",
-  taxa_internacao_respiratoria:      "Internações respiratórias",
-  taxa_internacao_mental:            "Internações saúde mental",
-  media_permanencia_sus:             "Média de permanência hospitalar",
-  taxa_aprovacao_ef:                 "Aprovação — Ens. Fundamental",
-  taxa_reprovacao_ef:                "Reprovação — Ens. Fundamental",
-  taxa_abandono_ef:                  "Abandono — Ens. Fundamental",
-  taxa_aprovacao_em:                 "Aprovação — Ens. Médio",
-  taxa_abandono_em:                  "Abandono — Ens. Médio",
-  distorcao_idade_serie_ef:          "Distorção idade-série — EF",
-  distorcao_idade_serie_em:          "Distorção idade-série — EM",
-  frota_automovel_por_1k:            "Automóveis",
-  frota_moto_por_1k:                 "Motocicletas",
-  frota_caminhao_por_1k:             "Caminhões",
-  frota_onibus_por_1k:               "Ônibus",
-  frota_total_por_1k:                "Frota total",
-  rebanho_bovino_por_km2:            "Rebanho bovino (por km²)",
-  rebanho_bovino_por_hab:            "Rebanho bovino (por hab.)",
-  rebanho_suino_por_hab:             "Rebanho suíno (por hab.)",
-  rebanho_ovino_por_hab:             "Rebanho ovino (por hab.)",
-  rebanho_caprino_por_hab:           "Rebanho caprino (por hab.)",
-  rebanho_galinaceos_por_hab:        "Galináceos (por hab.)",
-  rebanho_equino_por_hab:            "Equinos (por hab.)",
-  producao_leite_por_vaca:           "Produção de leite por vaca",
-  producao_leite_per_capita:         "Produção de leite per capita",
-  producao_mel_por_colmeia:          "Produção de mel por colmeia",
-  producao_mel_kg:                   "Produção de mel (total)",
-  producao_ovos_total:               "Produção de ovos (total)",
-  producao_ovos_per_capita:          "Produção de ovos per capita",
-  pct_geladeira:                     "Domicílios com geladeira",
-  pct_ar_condicionado:               "Domicílios com ar-condicionado",
-  pct_freezer:                       "Domicílios com freezer",
-  pct_tv:                            "Domicílios com televisão",
-  pct_automovel_domicilio:           "Domicílios com automóvel",
-  pct_motocicleta_domicilio:         "Domicílios com motocicleta",
-  pct_microondas:                    "Domicílios com microondas",
-  pct_computador:                    "Domicílios com computador",
-};
-
-const METRICAS_REAIS = new Set([
-  "pib_per_capita", "receita_per_capita",
-  "despesa_saude_per_capita", "despesa_educacao_per_capita",
-  "vbp_agricola_per_capita", "vbp_pecuaria_per_capita",
-  "renda_domiciliar_per_capita", "renda_domiciliar_mediana_pc",
-  "renda_media_trabalho", "renda_mediana_trabalho",
-]);
-
-const METRICAS_PERCENT = new Set([
-  "acesso_agua", "acesso_esgoto", "coleta_lixo",
-  "taxa_aprovacao_ef", "taxa_reprovacao_ef", "taxa_abandono_ef",
-  "taxa_aprovacao_em", "taxa_abandono_em",
-  "distorcao_idade_serie_ef", "distorcao_idade_serie_em",
-  "pct_geladeira", "pct_ar_condicionado", "pct_freezer", "pct_tv",
-  "pct_automovel_domicilio", "pct_motocicleta_domicilio",
-  "pct_microondas", "pct_computador",
-]);
-
-const METRICAS_POR_1K = new Set([
-  "taxa_natalidade", "taxa_nupcialidade", "taxa_divorcialidade", "taxa_separacao",
-  "leitos_sus_por_1k", "taxa_internacao_sus",
-  "frota_automovel_por_1k", "frota_moto_por_1k", "frota_caminhao_por_1k",
-  "frota_onibus_por_1k", "frota_total_por_1k",
-]);
-
-const METRICAS_POR_100K = new Set([
-  "incidencia_dengue", "incidencia_tuberculose",
-  "incidencia_hanseniase", "incidencia_leishmaniose",
-  "taxa_internacao_cardiovascular", "taxa_internacao_respiratoria",
-  "taxa_internacao_mental",
-]);
-
-function formatarMetrica(valor, metrica) {
-  if (valor == null || valor === "") return null;
-  const n = typeof valor === "number" ? valor : Number(valor);
-  if (!isFinite(n)) return null;
-
-  if (METRICAS_REAIS.has(metrica)) {
-    return { texto: "R$ " + n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: "" };
-  }
-  if (metrica === "densidade_pop") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " hab/km²" };
-  }
-  if (METRICAS_PERCENT.has(metrica)) {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: "%" };
-  }
-  if (metrica === "ideb_anos_iniciais" || metrica === "ideb_anos_finais") {
-    return { texto: n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), unidade: " / 10" };
-  }
-  if (metrica === "medicos_por_10k") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " /10k hab." };
-  }
-  if (METRICAS_POR_1K.has(metrica)) {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }), unidade: " /1k hab." };
-  }
-  if (METRICAS_POR_100K.has(metrica)) {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " /100k hab." };
-  }
-  if (metrica === "mortalidade_infantil" || metrica === "taxa_obito_fetal") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " /1k nasc. vivos" };
-  }
-  if (metrica === "media_permanencia_sus") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " dias" };
-  }
-  if (metrica === "producao_leite_por_vaca") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: " L/vaca" };
-  }
-  if (metrica === "producao_leite_per_capita") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: " L/hab." };
-  }
-  if (metrica === "producao_mel_por_colmeia") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " kg/colmeia" };
-  }
-  if (metrica === "producao_mel_kg") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: " kg" };
-  }
-  if (metrica === "producao_ovos_total") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), unidade: " mil dúzias" };
-  }
-  if (metrica === "producao_ovos_per_capita") {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }), unidade: " dúzias/hab." };
-  }
-  if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_km2")) {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }), unidade: " cab/km²" };
-  }
-  if (metrica.startsWith("rebanho_") && metrica.endsWith("_por_hab")) {
-    return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 3 }), unidade: " cab/hab." };
-  }
-  return { texto: n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }), unidade: " /100k hab." };
-}
 
 export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
   if (!feature) return null;
@@ -186,8 +29,8 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
 
   const valorFormatado = formatarMetrica(p.valor_metrica, metrica);
   const metricaLabel = cid10
-    ? `${METRICA_LABEL[metrica] ?? metrica} — ${CID10_LABELS[cid10] ?? `CID ${cid10}`}`
-    : (METRICA_LABEL[metrica] ?? metrica);
+    ? `${METRICA_LABEL_CURTO[metrica] ?? metrica} — ${CID10_LABELS[cid10] ?? `CID ${cid10}`}`
+    : (METRICA_LABEL_CURTO[metrica] ?? metrica);
 
   return (
     <div style={{

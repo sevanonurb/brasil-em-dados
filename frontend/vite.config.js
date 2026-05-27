@@ -6,7 +6,6 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxia chamadas /tiles para o Martin (evita CORS em dev)
       "/tiles": {
         target: "http://localhost:3000",
         changeOrigin: true,
@@ -14,8 +13,26 @@ export default defineConfig({
       },
     },
   },
-  // Necessário para apache-arrow (módulos ESM com top-level await)
   optimizeDeps: {
     include: ["apache-arrow", "maplibre-gl"],
+  },
+  build: {
+    target: "esnext",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "maplibre": ["maplibre-gl"],
+          "deckgl": [
+            "@deck.gl/core",
+            "@deck.gl/layers",
+            "@deck.gl/geo-layers",
+            "@deck.gl/extensions",
+            "@deck.gl/aggregation-layers",
+          ],
+          "react-vendor": ["react", "react-dom"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
   },
 });
