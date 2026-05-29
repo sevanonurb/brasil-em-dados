@@ -22,8 +22,10 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
   const ano = filtros?.ano ?? 2023;
   const cid10 = filtros?.cid10_capitulo;
 
-  // Detecta se é tile de UF ou município
+  // Detecta o nível geográfico do tile
   const isUF = p.sigla != null || p.regiao != null;
+  // Setor censitário: sub-municipal, sem dados econômicos próprios
+  const isSetor = !isUF && p.cod_setor != null && p.cod_ibge_7 == null;
   const nome = p.nome_municipio || p.nome || p.sigla || `Setor ${p.cod_setor}`;
   const subtitulo = isUF ? `${p.regiao ?? ""}` : null;
 
@@ -91,22 +93,25 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
           )}
         </div>
 
-        {/* Economia — dados disponíveis dependem do nível */}
-        <Secao titulo="Economia">
-          {isUF ? (
-            <>
-              <Metrica label="PIB (soma UF)" valor={p.pib_estadual} prefixo={"R$ "} decimais={0} />
-              <Metrica label="Receita (soma UF)" valor={p.receita_estadual_total} prefixo={"R$ "} decimais={0} />
-              <Metrica label="Transf. SUS" valor={p.transferencias_sus_total} prefixo={"R$ "} decimais={0} />
-            </>
-          ) : (
-            <>
-              <Metrica label="Transf. SUS" valor={p.transferencias_sus} prefixo={"R$ "} decimais={0} />
-              <Metrica label="Gasto em saúde" valor={p.despesa_saude} prefixo={"R$ "} decimais={0} />
-              <Metrica label="Gasto em educação" valor={p.despesa_educacao} prefixo={"R$ "} decimais={0} />
-            </>
-          )}
-        </Secao>
+        {/* Economia — só UF e município carregam dados econômicos nos tiles;
+            setores censitários são sub-municipais e não os emitem. */}
+        {!isSetor && (
+          <Secao titulo="Economia">
+            {isUF ? (
+              <>
+                <Metrica label="PIB (soma UF)" valor={p.pib_estadual} prefixo={"R$ "} decimais={0} />
+                <Metrica label="Receita (soma UF)" valor={p.receita_estadual_total} prefixo={"R$ "} decimais={0} />
+                <Metrica label="Transf. SUS" valor={p.transferencias_sus_total} prefixo={"R$ "} decimais={0} />
+              </>
+            ) : (
+              <>
+                <Metrica label="Transf. SUS" valor={p.transferencias_sus} prefixo={"R$ "} decimais={0} />
+                <Metrica label="Gasto em saúde" valor={p.despesa_saude} prefixo={"R$ "} decimais={0} />
+                <Metrica label="Gasto em educação" valor={p.despesa_educacao} prefixo={"R$ "} decimais={0} />
+              </>
+            )}
+          </Secao>
+        )}
 
         {/* Demografia */}
         <Secao titulo="Demografia">
