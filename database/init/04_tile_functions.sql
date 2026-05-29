@@ -414,6 +414,25 @@ BEGIN
                       OR (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
                   )
                 GROUP BY s.cod_municipio
+            ),
+            -- Métricas genéricas escopadas aos municípios do tile: substitui a
+            -- subquery correlacionada por linha (antes N+1 sobre metricas_municipio).
+            metricas_mun AS (
+                SELECT mm.cod_municipio, mm.valor
+                FROM api.metricas_municipio mm
+                WHERE mm.metrica = v_metrica
+                  AND mm.ano = v_ano
+                  AND v_metrica NOT IN (
+                      'taxa_mortalidade', 'taxa_homicidio', 'pib_per_capita',
+                      'receita_per_capita', 'despesa_saude_per_capita',
+                      'despesa_educacao_per_capita', 'densidade_pop'
+                  )
+                  AND mm.cod_municipio IN (
+                      SELECT DISTINCT sc2.cod_municipio
+                      FROM geo.setores_censitarios sc2
+                      WHERE sc2.geom_3857 && bbox_3857
+                        AND (v_cod_mun IS NULL OR sc2.cod_municipio = v_cod_mun)
+                  )
             )
             SELECT
                 sc.cod_setor,
@@ -433,13 +452,7 @@ BEGIN
                         e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                     WHEN v_metrica = 'densidade_pop' THEN
                         sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
-                    ELSE (
-                        SELECT mm.valor FROM api.metricas_municipio mm
-                        WHERE mm.cod_municipio = sc.cod_municipio
-                          AND mm.metrica = v_metrica
-                          AND mm.ano = v_ano
-                        LIMIT 1
-                    )
+                    ELSE mm2.valor
                 END AS valor_metrica,
                 ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
             FROM geo.setores_censitarios sc
@@ -447,6 +460,7 @@ BEGIN
             LEFT JOIN economia.siconfi_municipios e
                 ON e.cod_municipio = sc.cod_municipio AND e.ano = v_ano
             LEFT JOIN mortalidade_mun ma ON ma.cod_municipio = sc.cod_municipio / 10
+            LEFT JOIN metricas_mun mm2 ON mm2.cod_municipio = sc.cod_municipio
             WHERE sc.geom_3857 && bbox_3857
               AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
         ) tile
@@ -474,6 +488,25 @@ BEGIN
                       OR (v_metrica = 'taxa_homicidio' AND s.cid10_codigo >= 'X85' AND s.cid10_codigo < 'Y1')
                   )
                 GROUP BY s.cod_municipio
+            ),
+            -- Métricas genéricas escopadas aos municípios do tile: substitui a
+            -- subquery correlacionada por linha (antes N+1 sobre metricas_municipio).
+            metricas_mun AS (
+                SELECT mm.cod_municipio, mm.valor
+                FROM api.metricas_municipio mm
+                WHERE mm.metrica = v_metrica
+                  AND mm.ano = v_ano
+                  AND v_metrica NOT IN (
+                      'taxa_mortalidade', 'taxa_homicidio', 'pib_per_capita',
+                      'receita_per_capita', 'despesa_saude_per_capita',
+                      'despesa_educacao_per_capita', 'densidade_pop'
+                  )
+                  AND mm.cod_municipio IN (
+                      SELECT DISTINCT sc2.cod_municipio
+                      FROM geo.setores_censitarios sc2
+                      WHERE sc2.geom_3857 && bbox_3857
+                        AND (v_cod_mun IS NULL OR sc2.cod_municipio = v_cod_mun)
+                  )
             )
             SELECT
                 sc.cod_setor,
@@ -493,13 +526,7 @@ BEGIN
                         e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                     WHEN v_metrica = 'densidade_pop' THEN
                         sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
-                    ELSE (
-                        SELECT mm.valor FROM api.metricas_municipio mm
-                        WHERE mm.cod_municipio = sc.cod_municipio
-                          AND mm.metrica = v_metrica
-                          AND mm.ano = v_ano
-                        LIMIT 1
-                    )
+                    ELSE mm2.valor
                 END AS valor_metrica,
                 ST_AsMVTGeom(sc.geom_3857, bbox_3857, 4096, 4, true) AS geom_mvt
             FROM geo.setores_censitarios sc
@@ -507,6 +534,7 @@ BEGIN
             LEFT JOIN economia.siconfi_municipios e
                 ON e.cod_municipio = sc.cod_municipio AND e.ano = v_ano
             LEFT JOIN mortalidade_mun ma ON ma.cod_municipio = sc.cod_municipio / 10
+            LEFT JOIN metricas_mun mm2 ON mm2.cod_municipio = sc.cod_municipio
             WHERE sc.geom_3857 && bbox_3857
               AND (v_cod_mun IS NULL OR sc.cod_municipio = v_cod_mun)
         ) tile
@@ -733,6 +761,7 @@ RETURNS bytea AS $$
 DECLARE
     result    bytea;
     bbox_3857 geometry := ST_TileEnvelope(z, x, y);
+    bbox_4674 geometry := ST_Transform(ST_TileEnvelope(z, x, y), 4674);
     pop_min   INT;
 BEGIN
     -- Filtro de população por zoom: zooms baixos → só cidades grandes
@@ -756,10 +785,9 @@ BEGIN
             ) AS geom_mvt
         FROM geo.municipios m
         WHERE m.populacao_2022 >= pop_min
-          AND ST_Intersects(
-              ST_Transform(m.geom, 3857),
-              bbox_3857
-          )
+          -- Pré-filtro de bbox em SRID nativo (4674) → usa o índice GIST de m.geom,
+          -- evita ST_Transform em todas as linhas antes do teste espacial.
+          AND m.geom && bbox_4674
     ) t;
 
     RETURN COALESCE(result, ''::bytea);
