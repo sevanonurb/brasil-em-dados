@@ -136,9 +136,6 @@ export const ANOS_POR_METRICA_DEFAULT = {
   frota_total_por_1k:          [2022, 2021, 2020],
 };
 
-// Re-exporta para compatibilidade com imports existentes
-export const ANOS_POR_METRICA = ANOS_POR_METRICA_DEFAULT;
-
 // Métricas que suportam filtros demográficos (sexo, cor/raça, faixa etária)
 export const METRICAS_SAUDE = ["taxa_mortalidade", "taxa_homicidio"];
 
