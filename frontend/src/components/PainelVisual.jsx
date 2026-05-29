@@ -147,7 +147,7 @@ const selectStyleMini = {
 export function PainelVisual({
   visual, onUpdate, onFlyTo,
   comparacao, onComparacaoUpdate,
-  onScreenshot, onFullscreen,
+  onScreenshot, onReport, onFullscreen,
   anosDisponiveis,
 }) {
   const [aberto, setAberto] = useState(false);
@@ -308,6 +308,17 @@ export function PainelVisual({
           <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
             <BotaoIcone title="Captura" icon="📷" onClick={onScreenshot} />
             <BotaoIcone title="Tela cheia" icon="⛶" onClick={onFullscreen} />
+          </div>
+
+          {/* ── Exportar Report ── */}
+          <Secao titulo="Exportar Carta" />
+          <div style={{ fontSize: 10, color: "#4a5568", marginBottom: 6, lineHeight: 1.4 }}>
+            Carta tematica ABNT com legenda, escala e metadados
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <BotaoIcone title="PNG" icon="🖼️" onClick={() => onReport?.("png")} />
+            <BotaoIcone title="PDF" icon="📄" onClick={() => onReport?.("pdf")} />
+            <BotaoIcone title="Instagram 4:5" icon="📱" onClick={() => onReport?.("instagram")} />
           </div>
 
           {/* ── Navegação ── */}

@@ -720,6 +720,53 @@ END;
 $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Rótulos de municípios brasileiros (centroids + nomes)
+-- Filtragem progressiva por população conforme zoom para evitar clutter.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION api.tiles_labels_municipios(
+    z            INT,
+    x            INT,
+    y            INT,
+    query_params JSON DEFAULT '{}'
+)
+RETURNS bytea AS $$
+DECLARE
+    result    bytea;
+    bbox_3857 geometry := ST_TileEnvelope(z, x, y);
+    pop_min   INT;
+BEGIN
+    -- Filtro de população por zoom: zooms baixos → só cidades grandes
+    pop_min := CASE
+        WHEN z <= 3 THEN 500000
+        WHEN z <= 5 THEN 100000
+        WHEN z <= 7 THEN 50000
+        WHEN z <= 9 THEN 10000
+        ELSE 0
+    END;
+
+    SELECT ST_AsMVT(t, 'labels_municipios', 4096, 'geom_mvt')
+    INTO result
+    FROM (
+        SELECT
+            m.nome,
+            m.populacao_2022::FLOAT8 AS populacao,
+            ST_AsMVTGeom(
+                ST_Transform(ST_Centroid(m.geom), 3857),
+                bbox_3857, 4096, 64, true
+            ) AS geom_mvt
+        FROM geo.municipios m
+        WHERE m.populacao_2022 >= pop_min
+          AND ST_Intersects(
+              ST_Transform(m.geom, 3857),
+              bbox_3857
+          )
+    ) t;
+
+    RETURN COALESCE(result, ''::bytea);
+END;
+$$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Utilitários
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION api.notify_cache_invalidation(

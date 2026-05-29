@@ -104,11 +104,13 @@ Browser → Martin (Rust, port 3000) — direct via CORS (dev)
           → ST_AsMVT → bytea → browser
 ```
 
-The frontend uses **two simultaneous render surfaces**:
-1. **MapLibre `Map`** object in a container div — renders the basemap (OSM raster at zoom ≥ 9)
-2. **Deck.gl `Deck`** instance on a separate canvas — renders analytical vector layers
+The frontend uses a **single integrated canvas** via `MapboxOverlay` (interleaved mode):
+1. **MapLibre `Map`** — manages the WebGL context, basemap (CARTO vector tiles), interaction, and viewport
+2. **Deck.gl `MapboxOverlay`** with `interleaved: true` — renders choropleth layers WITHIN MapLibre's rendering pipeline (inserted `beforeId: "roads"`)
 
-These are synced via `map.jumpTo()` on every `onViewStateChange` event from Deck.gl. MapLibre is set `interactive: false`; Deck.gl controls all interaction.
+MapLibre controls all interaction (zoom, pan, click). Deck.gl layers are set via `overlay.setProps({ layers })`. A separate standalone `Deck` instance exists only for the optional side-by-side comparison mode (right-half canvas, `compareCanvasRef`).
+
+The basemap is **CARTO vector tiles** (OpenMapTiles schema) with togglable layers: water, landcover, roads, satellite (Esri), and municipality labels (Martin `tiles_labels_municipios`). Controlled via `PainelVisual.jsx`.
 
 ### Semantic zoom levels
 
@@ -121,7 +123,7 @@ The map shows completely different data sources at each zoom level — not just 
 | MUNICIPAL | 9–12 | ~215k setores censitários | `api.tiles_setores` |
 | GEOLOCALIZACAO | 13+ | CNEFE address points | `api.tiles_cnefe` |
 
-Layers are conditionally included/excluded from the Deck.gl layers array (not `visible: false`, which still fetches tiles).
+Layers are conditionally included/excluded from the `MapboxOverlay` layers array (not `visible: false`, which still fetches tiles).
 
 ### Database schemas
 
@@ -212,6 +214,28 @@ The `setAnosDisponiveis` action also auto-corrects the selected year if it's no 
 Minimal stdlib Python HTTP server (no framework). Runs as the `brasil_api` container (internal port 8001, no external port). Exposes `GET /anos` only. The Python server sets `Access-Control-Allow-Origin: *` — do **not** also set it in the nginx `location /api/` block or the browser will reject due to duplicate CORS headers.
 
 `FALLBACK` dict in `server.py` must mirror `ANOS_POR_METRICA_DEFAULT` in `cross_filter.js` — both must be updated when adding a new metric.
+
+### Metric metadata (`frontend/src/utils/metricas.js`)
+
+Single source of truth for metric labels and formatting. Contains:
+- `METRICA_LABEL_CURTO` — short labels for tooltips (~120 entries)
+- `METRICA_LABEL_LONGO` — full labels for legends, report headers, and panels
+- Formatting category sets: `METRICAS_REAIS` (R$), `METRICAS_PERCENT` (%), `METRICAS_POR_1K` (/1k hab.), `METRICAS_POR_100K` (/100k hab.)
+- `FORMATO_ESPECIAL` — per-metric custom formatting (decimals, units, minDecimals)
+- `formatarMetrica(valor, metrica)` — unified formatter used by tooltips, legends, and reports
+- `METRICAS_SAUDE_SET` — metrics that support demographic filters (sexo, cor_raca, faixa_etaria)
+
+### Cartographic report export (`frontend/src/utils/report.js`)
+
+Generates ABNT NBR 15777–compliant thematic map cards (PNG/PDF) using Canvas 2D API (no external dependencies). Captures the map via `map.getCanvas()` (requires `preserveDrawingBuffer: true` on MapLibre). Elements: title, legend with tick marks, scale bar (meters-per-pixel corrected for report scaling), north arrow, SIRGAS 2000/EPSG:3857 metadata, geographic coordinates, data source, inset locator map (when UF filter is active). PDF is raw ISO 32000-1 with JPEG XObject (A3 landscape).
+
+### Visual controls (`frontend/src/components/PainelVisual.jsx`)
+
+Floating panel for non-data visual settings: overlay opacity, border toggles, basemap opacity, road/satellite/label layer visibility, side-by-side comparison mode, screenshot, and cartographic report export buttons.
+
+### Municipality label tiles (`api.tiles_labels_municipios`)
+
+Martin-served vector tile function that returns municipality centroids with names, filtered by population threshold per zoom level (zoom ≤ 3 → only cities > 500k, zoom 10+ → all). Used as the `martin-labels` source in the basemap style instead of generic CARTO place labels.
 
 ---
 
@@ -373,10 +397,11 @@ Municipality code alignment: `sim_mortalidade.cod_municipio` = 6-digit; `populac
 
 1. **Load data** into `api.metricas_municipio` using `upsert_metricas()` — `cod_municipio` must be 7-digit IBGE
 2. **Refresh views**: `REFRESH MATERIALIZED VIEW CONCURRENTLY api.indicadores_municipio; REFRESH MATERIALIZED VIEW CONCURRENTLY api.indicadores_uf;`
-3. **Frontend dropdown**: add `{ value: "...", label: "..." }` to the appropriate group in `frontend/src/components/PainelControles.jsx`
-4. **Fallback years**: add entry to `ANOS_POR_METRICA_DEFAULT` in `frontend/src/filters/cross_filter.js`
-5. **Color ranges**: add entry to `METRICAS_RANGES` in `frontend/src/main.jsx`
-6. **API fallback**: add entry to `FALLBACK` dict in `api/server.py`
+3. **Metric labels**: add entries to `METRICA_LABEL_CURTO` and `METRICA_LABEL_LONGO` in `frontend/src/utils/metricas.js`, and add the metric to the appropriate formatting set (`METRICAS_REAIS`, `METRICAS_PERCENT`, `METRICAS_POR_1K`, `METRICAS_POR_100K`) or to `FORMATO_ESPECIAL` for custom formatting
+4. **Frontend dropdown**: add `{ value: "...", label: "..." }` to the appropriate group in `frontend/src/components/PainelControles.jsx`
+5. **Fallback years**: add entry to `ANOS_POR_METRICA_DEFAULT` in `frontend/src/filters/cross_filter.js`
+6. **Color ranges**: add entry to `METRICAS_RANGES` in `frontend/src/main.jsx`
+7. **API fallback**: add entry to `FALLBACK` dict in `api/server.py`
 
 No SQL changes needed unless the metric requires a custom join (SIM records, CNES, etc.) — those need a new `CASE WHEN` branch in `database/init/04_tile_functions.sql`.
 

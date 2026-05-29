@@ -22,6 +22,7 @@ import {
 } from "./layers/semantic_zoom.js";
 import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { METRICA_LABEL_CURTO, formatarParaTooltip } from "./utils/metricas.js";
+import { gerarReport } from "./utils/report.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { PainelVisual } from "./components/PainelVisual.jsx";
@@ -54,6 +55,11 @@ const BASEMAP_STYLE = {
       tileSize: 256,
       attribution: "© Esri",
     },
+    "martin-labels": {
+      type: "vector",
+      tiles: [`${import.meta.env.VITE_MARTIN_URL}/tiles_labels_municipios/{z}/{x}/{y}`],
+      maxzoom: 14,
+    },
   },
   glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
   layers: [
@@ -85,11 +91,11 @@ const BASEMAP_STYLE = {
       paint: { "line-color": "#505870", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 10, 1.5, 14, 3], "line-opacity": 0.8 },
       filter: ["in", "class", "motorway", "trunk", "primary"],
     },
-    // ── Labels (off por padrão) ──
-    { id: "place-labels", type: "symbol", source: "carto", "source-layer": "place",
+    // ── Labels de municípios brasileiros (Martin — somente Brasil) ──
+    { id: "place-labels", type: "symbol", source: "martin-labels", "source-layer": "labels_municipios",
       layout: {
         visibility: "none",
-        "text-field": "{name}", "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 8, 13, 12, 16],
+        "text-field": "{nome}", "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 8, 13, 12, 16],
         "text-font": ["Open Sans Bold"],
         "text-anchor": "center", "text-max-width": 8,
       },
@@ -922,17 +928,54 @@ export default function App() {
   // Coordenadas do mouse
   const [mouseCoords, setMouseCoords] = useState(null);
 
-  // Ferramentas — screenshot e tela cheia
+  // Ferramentas — screenshot, report e tela cheia
   const onScreenshot = useCallback(() => {
-    const canvas = mapContainerRef.current?.querySelector("canvas") ?? document.querySelector("canvas");
-    if (!canvas) return;
+    const map = mapRef.current;
+    if (!map) return;
     try {
+      const canvas = map.getCanvas();
       const link = document.createElement("a");
       link.download = `brasil-em-dados-${Date.now()}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (_) { /* canvas tainted — CORS */ }
   }, []);
+
+  const onReport = useCallback((formato) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const nivelAtualCalc = nivelForcado ?? getNivelSemantico(viewState.zoom);
+    const displayRange = normBounds ?? estatisticas;
+    const bounds = map.getBounds();
+    gerarReport({
+      mapCanvas: map.getCanvas(),
+      viewState,
+      bounds: {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+      },
+      metrica: filtros.metrica,
+      ano: filtros.ano,
+      nivel: nivelAtualCalc,
+      nivelMeta: NIVEL_METADATA[nivelAtualCalc],
+      invertida: METRICAS_INVERTIDAS.has(filtros.metrica),
+      range: displayRange,
+      adaptativo: normBounds !== null,
+      featureSelecionada,
+      filtros: {
+        cod_uf: filtros.cod_uf,
+        cid10_capitulo: filtros.cid10_capitulo,
+        sexo: filtros.sexo,
+        cor_raca: filtros.cor_raca,
+        faixa_etaria_min: filtros.faixa_etaria_min,
+        faixa_etaria_max: filtros.faixa_etaria_max,
+      },
+      cid10Labels: CID10_LABELS,
+      formato,
+    });
+  }, [viewState, nivelForcado, filtros, normBounds, estatisticas, featureSelecionada]);
 
   const onFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -1026,6 +1069,7 @@ export default function App() {
       style: BASEMAP_STYLE,
       center: [INITIAL_VIEW.longitude, INITIAL_VIEW.latitude],
       zoom: INITIAL_VIEW.zoom,
+      preserveDrawingBuffer: true,
     });
 
     const overlay = new MapboxOverlay({
@@ -1206,14 +1250,34 @@ export default function App() {
       return normalizarValor(val, activeRange.min, activeRange.max);
     };
 
-    // Cor coroplética compartilhada pela camada de setores
+    // ID unico da feature selecionada para highlight
+    const selId = featureSelecionada?.properties?.cod_ibge_7
+      ?? featureSelecionada?.properties?.cod_uf
+      ?? featureSelecionada?.properties?.cod_setor
+      ?? null;
+
+    const isSelected = (f) => {
+      if (!selId) return false;
+      const p = f.properties;
+      return (p?.cod_ibge_7 === selId || p?.cod_uf === selId || p?.cod_setor === selId);
+    };
+
+    // Cor coroplética compartilhada — com highlight de selecao
     const getChoroplethColor = (f) => {
       const raw = f.properties?.valor_metrica;
       if (raw == null || raw === "") return [55, 60, 75, 160];
       const val = Number(raw);
       if (!isFinite(val)) return [55, 60, 75, 160];
-      return getCorCoroplética(resolverT(val), 220, metricaInvertida);
+      const base = getCorCoroplética(resolverT(val), 220, metricaInvertida);
+      if (isSelected(f)) return [base[0], base[1], base[2], 255];
+      return base;
     };
+
+    // Borda de selecao: feature selecionada recebe borda branca brilhante
+    const getSelectionLineColor = (baseColor) => (f) =>
+      isSelected(f) ? [255, 255, 255, 240] : baseColor;
+    const getSelectionLineWidth = (baseWidth) => (f) =>
+      isSelected(f) ? Math.max(baseWidth * 3, 3) : baseWidth;
 
     // beforeId: "roads" → deck.gl renderiza ABAIXO das camadas vetoriais de ruas/labels
     const BEFORE_ID = "roads";
@@ -1230,13 +1294,14 @@ export default function App() {
         highlightColor: [255, 255, 255, 80],
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
-        getLineColor: ufLineColor,
-        getLineWidth: ufLineWidth,
+        getLineColor: getSelectionLineColor(ufLineColor),
+        getLineWidth: getSelectionLineWidth(ufLineWidth),
         lineWidthMinPixels: ufLineMinPx,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
         updateTriggers: {
-          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
-          getLineColor: [visual.bordurasEstados],
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida, selId],
+          getLineColor: [visual.bordurasEstados, selId],
+          getLineWidth: [selId],
         },
       }));
     }
@@ -1265,13 +1330,14 @@ export default function App() {
         highlightColor: [255, 255, 255, 60],
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
-        getLineColor: munLineColor,
-        getLineWidth: munLineWidth,
+        getLineColor: getSelectionLineColor(munLineColor),
+        getLineWidth: getSelectionLineWidth(munLineWidth),
         lineWidthMinPixels: munLineMinPx,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
         updateTriggers: {
-          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
-          getLineColor: [visual.bordurasMunicipios],
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida, selId],
+          getLineColor: [visual.bordurasMunicipios, selId],
+          getLineWidth: [selId],
         },
       }));
     }
@@ -1288,14 +1354,15 @@ export default function App() {
         highlightColor: [255, 255, 255, 60],
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
-        getLineColor: setorLineColor,
-        getLineWidth: setorLineWidth,
+        getLineColor: getSelectionLineColor(setorLineColor),
+        getLineWidth: getSelectionLineWidth(setorLineWidth),
         lineWidthMinPixels: setorLineMinPx,
         pointRadiusMinPixels: 2,
         onClick: ({ object }) => object && setFeatureSelecionada(object),
         updateTriggers: {
-          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida],
-          getLineColor: [visual.bordurasMunicipios],
+          getFillColor: [normSorted, activeRange, tileUrlKey, metricaInvertida, selId],
+          getLineColor: [visual.bordurasMunicipios, selId],
+          getLineWidth: [selId],
         },
       }));
     }
@@ -1349,7 +1416,7 @@ export default function App() {
       layers,
       getTooltip: makeTooltip(filtros.metrica, filtros.cid10_capitulo),
     });
-  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, normSorted, visual, handleTileLoad, comparacao.ativo]);
+  }, [nivelAtual, nivelForcado, viewState.zoom, tileUrlKey, estatisticas, filtros, normBounds, normSorted, visual, handleTileLoad, comparacao.ativo, featureSelecionada]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -1433,6 +1500,7 @@ export default function App() {
         comparacao={comparacao}
         onComparacaoUpdate={onComparacaoUpdate}
         onScreenshot={onScreenshot}
+        onReport={onReport}
         onFullscreen={onFullscreen}
         anosDisponiveis={filtros.anosDisponiveis}
       />
