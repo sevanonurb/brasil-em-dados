@@ -166,11 +166,10 @@ function obterIndicadorDirecao(metrica, invertida) {
 
 // ── Painel de detalhes da feature selecionada (Canvas 2D) ──────────────────
 
-function desenharPainelDetalhes(ctx, x, y, w, feature, metrica, ano, cid10Labels, S, FF) {
+function desenharPainelDetalhes(ctx, x, y, w, feature, metrica, ano, cid10Labels, S, FF, maxBottom) {
   const p = feature?.properties ?? {};
   const isUF = p.sigla != null || p.regiao != null;
   const nome = p.nome_municipio || p.nome || p.sigla || `Setor ${p.cod_setor ?? ""}`;
-  const cid10 = null; // cid10 vem dos filtros, passado separadamente se necessario
 
   const cor = { fundo:"rgba(15,17,23,0.95)", moldura:"#2d3748", tit:"#e2e8f0", sub:"#a0aec0",
                 txt:"#a0aec0", sutil:"#718096", accent:"#4299e1", accentBg:"rgba(66,153,225,0.15)" };
@@ -203,6 +202,13 @@ function desenharPainelDetalhes(ctx, x, y, w, feature, metrica, ano, cid10Labels
   cy += 12 * S; // padding inferior
 
   const totalH = cy;
+
+  // Mantém o painel dentro da área do mapa: se a altura real ultrapassaria o
+  // limite inferior (ex.: invadiria a legenda no formato retrato), ancora pelo
+  // rodapé do mapa em vez de transbordar.
+  if (maxBottom != null && y + totalH > maxBottom) {
+    y = Math.max(maxBottom - totalH, 0);
+  }
 
   // Desenhar fundo com cantos arredondados
   ctx.fillStyle = cor.fundo;
@@ -393,7 +399,7 @@ function gerarPNG(opts) {
     const panelW = 220*S;
     const panelX = mapX + 8*S;
     const panelY = mapY + 8*S;
-    desenharPainelDetalhes(ctx, panelX, panelY, panelW, opts.featureSelecionada, metrica, ano, cid10Labels, S, FF);
+    desenharPainelDetalhes(ctx, panelX, panelY, panelW, opts.featureSelecionada, metrica, ano, cid10Labels, S, FF, mapY + mapH - 8*S);
   }
 
   y+=mapH+8*S;
@@ -698,7 +704,7 @@ function gerarInstagram(opts) {
     const panelX = mapX + 8*S;
     // Se tem inset, coloca o painel acima dele
     const panelY = filtros.cod_uf ? mapY + 8*S : mapY + mapH - 120*S;
-    desenharPainelDetalhes(ctx, panelX, panelY, panelW, opts.featureSelecionada, metrica, ano, cid10Labels, S, FF);
+    desenharPainelDetalhes(ctx, panelX, panelY, panelW, opts.featureSelecionada, metrica, ano, cid10Labels, S, FF, mapY + mapH - 8*S);
   }
 
   y += mapH + 8*S;

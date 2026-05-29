@@ -747,9 +747,15 @@ function useAnosDisponiveis() {
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
     fetch(`${apiUrl}/api/anos`)
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => { if (data) setAnosDisponiveis(data); })
-      .catch(() => {}); // mantém o fallback em caso de erro
+      .catch(err => {
+        // Mantém ANOS_POR_METRICA_DEFAULT como fallback, mas torna a falha visível.
+        console.warn(`[anos] falha ao buscar ${apiUrl}/api/anos — usando fallback:`, err.message);
+      });
   }, [setAnosDisponiveis]);
 }
 
