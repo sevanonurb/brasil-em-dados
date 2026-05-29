@@ -500,7 +500,7 @@ function gerarPNG(opts) {
   ctx.fillStyle="#0a0c12"; ctx.fillRect(mg/2+4*S,fY,W-mg-8*S,footerH-4*S);
   ctx.fillStyle=cor.sub; ctx.font=`bold ${10*S}px ${FF}`; ctx.fillText("Brasil em Dados \u2014 Painel Geoespacial Interativo do Brasil",PAD,fY+16*S);
   ctx.fillStyle=cor.sutil; ctx.font=`${8*S}px ${FF}`;
-  ctx.fillText("ABNT NBR 15777:2009 | Datum SIRGAS 2000 - Res. IBGE R.PR-01/2015 | brasilemdados.org",PAD,fY+34*S);
+  ctx.fillText("ABNT NBR 15777:2009 | Datum SIRGAS 2000 - Res. IBGE R.PR-01/2015 | brasilemdados.ia.br",PAD,fY+34*S);
   ctx.textAlign="right"; ctx.fillText(`Zoom: ${viewState.zoom.toFixed(1)} | Nivel: ${nivelMeta?.label??nivel}`,W-PAD,fY+34*S); ctx.textAlign="left";
 
   // ── Download ────────────────────────────────────────────────────────────────
@@ -772,7 +772,7 @@ function gerarInstagram(opts) {
 
   ctx.textAlign = "right";
   ctx.fillStyle = cor.accent; ctx.font = `bold ${11*S}px ${FF}`;
-  ctx.fillText("brasilemdados.org", W - PAD, y + 8*S);
+  ctx.fillText("brasilemdados.ia.br", W - PAD, y + 8*S);
   const d = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
   ctx.fillStyle = cor.mini; ctx.font = `${8*S}px ${FF}`;
   ctx.fillText(d, W - PAD, y + 22*S);
@@ -1126,7 +1126,7 @@ function gerarPDF(opts) {
   // ── Rodape ──
   cs.push(`${rgb("#0a0c12")} rg ${X(m+4)} ${Y(ph-m-4)} ${(cw-8).toFixed(2)} ${-footerH} re f`);
   cs.push(`BT /F2 8 Tf ${rgb("#a0aec0")} rg ${X(m+12)} ${Y(ph-m-4+10)} Td (Brasil em Dados - Painel Geoespacial Interativo do Brasil) Tj ET`);
-  cs.push(`BT /F1 6 Tf ${rgb("#718096")} rg ${X(m+12)} ${Y(ph-m-4+22)} Td (ABNT NBR 15777:2009 | Datum SIRGAS 2000 - Res. IBGE R.PR-01/2015 | brasilemdados.org) Tj ET`);
+  cs.push(`BT /F1 6 Tf ${rgb("#718096")} rg ${X(m+12)} ${Y(ph-m-4+22)} Td (ABNT NBR 15777:2009 | Datum SIRGAS 2000 - Res. IBGE R.PR-01/2015 | brasilemdados.ia.br) Tj ET`);
   cs.push(`BT /F1 6 Tf ${rgb("#718096")} rg ${X(pw-m-200)} ${Y(ph-m-4+22)} Td (${pdfS(`Zoom: ${viewState.zoom.toFixed(1)} | Nivel: ${nivelMeta?.label??nivel}`)}) Tj ET`);
 
   // ── Montar PDF ──
