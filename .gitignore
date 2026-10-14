@@ -48,3 +48,6 @@ postgres_data/
 .DS_Store
 Thumbs.db
 nginx/cache/
+
+# imagens soltas na raiz
+*.jpg
