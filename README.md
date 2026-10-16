@@ -3,6 +3,10 @@
 An interactive panel that serves **244 public indicators** for Brazil — from state level down
 to **census tract** — as vector tiles generated directly from PostGIS.
 
+![The panel: general mortality rate per 100k inhabitants, all 27 states, 2023](docs/screenshot.png)
+
+<sub>General mortality per 100k inhabitants, 2023, all 27 states — rendered live from PostGIS as vector tiles. The same view drills down to municipality and census tract.</sub>
+
 Built to answer one question well: *what does this indicator look like across the whole
 country, at the finest public resolution available, without waiting for a page to load?*
 
@@ -77,8 +81,10 @@ This is an **independent build**, not a maintained product. What it does not hav
   loaders are run manually.
 - **The metadata API is stdlib `http.server`** (`api/server.py`, 438 lines), not FastAPI.
   It works; it has no OpenAPI schema, no request validation and no auth.
-- **No hosted demo yet.** Evaluating it currently means bringing up 14 containers locally.
-  A static PMTiles build is the planned fix — the client library is already a dependency.
+- **No hosted demo yet** — the screenshot above is the panel running locally. Evaluating it
+  yourself takes `docker compose up postgis pgbouncer api martin frontend nginx` (six services,
+  ~4.3 GB of images) plus a data load. A static PMTiles build is the planned fix, so the map
+  can be served from object storage with no backend — the client library is already a dependency.
 - Coverage and freshness follow the upstream sources, which vary by dataset and by year.
 
 ## License
