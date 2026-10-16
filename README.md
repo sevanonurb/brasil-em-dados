@@ -3,9 +3,13 @@
 An interactive panel that serves **244 public indicators** for Brazil — from state level down
 to **census tract** — as vector tiles generated directly from PostGIS.
 
-![The panel: general mortality rate per 100k inhabitants, all 27 states, 2023](docs/screenshot.png)
+![The panel at municipal level: general mortality per 100k inhabitants across all 5,570 Brazilian municipalities, 2023](docs/panel-municipal.png)
 
-<sub>General mortality per 100k inhabitants, 2023, all 27 states — rendered live from PostGIS as vector tiles. The same view drills down to municipality and census tract.</sub>
+<sub>**All 5,570 municipalities at once** — general mortality per 100k inhabitants, 2023. Every polygon is served as a vector tile generated on demand from PostGIS; nothing is pre-rendered.</sub>
+
+![The same indicator aggregated to the 27 states](docs/panel-state.png)
+
+<sub>The same indicator at state level. The panel switches resolution — state, municipality, census tract — against the same filters: year, cause (ICD-10), sex, race and age band.</sub>
 
 Built to answer one question well: *what does this indicator look like across the whole
 country, at the finest public resolution available, without waiting for a page to load?*
