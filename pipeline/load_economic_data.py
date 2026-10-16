@@ -16,6 +16,7 @@ Correções aplicadas após leitura dos docs das APIs:
 
 import json
 import os
+import pathlib
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -405,7 +406,8 @@ if __name__ == "__main__":
 
     if not DB_PARAMS["password"]:
         try:
-            for line in open("/home/sevan/Desktop/Codes/brasil_em_dados/.env"):
+            env = pathlib.Path(__file__).resolve().parent.parent / ".env"
+            for line in open(env):
                 if line.startswith("POSTGRES_PASSWORD="):
                     DB_PARAMS["password"] = line.strip().split("=", 1)[1]
         except Exception:
