@@ -157,6 +157,24 @@ function temFiltrosAtivos(filtros) {
     (filtros.faixa_etaria_max != null && filtros.faixa_etaria_max !== 17));
 }
 
+function quebrarTexto(ctx, texto, maxW, font) {
+  ctx.font = font;
+  const palavras = texto.split(" ");
+  const linhas = [];
+  let atual = "";
+  for (const p of palavras) {
+    const teste = atual ? atual + " " + p : p;
+    if (ctx.measureText(teste).width > maxW && atual) {
+      linhas.push(atual);
+      atual = p;
+    } else {
+      atual = teste;
+    }
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
+
 function obterIndicadorDirecao(metrica, invertida) {
   if (invertida) return "\u2191 melhor";
   if (METRICAS_SAUDE_SET.has(metrica)) return "\u2191 maior risco";
@@ -283,7 +301,24 @@ export function gerarReport(opts) {
   if (!opts.mapCanvas) { alert("Mapa nao disponivel para captura."); return; }
   if (opts.formato === "pdf") return gerarPDF(opts);
   if (opts.formato === "instagram") return gerarInstagram(opts);
+  if (opts.formato === "carta") return gerarCarta(opts);
   return gerarPNG(opts);
+}
+
+/**
+ * Gera um canvas de preview da carta (escala reduzida, sem download).
+ * @param {object} opts - mesmas opts de gerarCarta
+ * @param {number} [targetWidth=260] - largura alvo em px CSS
+ * @returns {HTMLCanvasElement|null}
+ */
+export function gerarPreviewCarta(opts, targetWidth = 260) {
+  if (!opts.mapCanvas) return null;
+  const scale = targetWidth / 1080;
+  try {
+    return gerarCarta({ ...opts, formato: "carta" }, scale, true);
+  } catch (_) {
+    return null;
+  }
 }
 
 
@@ -783,6 +818,473 @@ function gerarInstagram(opts) {
     const link = document.createElement("a");
     link.download = `brasil-em-dados_${metrica}_${ano}_instagram.png`;
     link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (e) {
+    alert("Erro ao exportar: canvas contaminado por CORS.\nDesative o satelite e tente novamente.");
+  }
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  CARTA — Formato editorial claro, inspirado em cartografia profissional
+//  Tema claro, tipografia grande, legenda discreta, export JPEG
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Gera a carta tematica completa.
+ * @param {object} opts
+ * @param {number} [scaleOverride] - fator de escala (default 2 para export, ~0.25 para preview)
+ * @param {boolean} [returnCanvas] - se true, retorna o canvas ao inves de baixar
+ */
+function gerarCarta(opts, scaleOverride, returnCanvas) {
+  const { mapCanvas, viewState, bounds, metrica, ano, nivel, nivelMeta,
+          invertida, range, filtros, cid10Labels, adaptativo } = opts;
+  const tema = opts.tema ?? "claro";
+  const proporcao = opts.proporcao ?? "auto";
+  const mostrarDestaque = opts.mostrarDestaque !== false;
+  const mostrarLocalizador = opts.mostrarLocalizador !== false;
+  const mostrarLegenda = opts.mostrarLegenda !== false;
+  const mostrarNorte = opts.mostrarNorte !== false;
+  const mostrarCoordenadas = opts.mostrarCoordenadas !== false;
+  const mostrarDescricao = opts.mostrarDescricao !== false;
+  const tituloCustom = opts.tituloCustom;
+  const textoExplicativo = opts.textoExplicativo;
+
+  let mapExportavel = true;
+  try { mapCanvas.toDataURL(); } catch (_) { mapExportavel = false; }
+
+  const S = scaleOverride ?? 2;
+  const W = 1080 * S;
+  const PAD = 48 * S;
+  const FF = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  const contentW = W - 2 * PAD;
+
+  // ── Paletas ──
+  const PALETAS = {
+    claro: {
+      fundo:     "#f2f1ec",
+      titulo:    "#1a1a1a",
+      subtitulo: "#3a3a3a",
+      texto:     "#555555",
+      sutil:     "#888888",
+      marca:     "#b0b0a8",
+      barra:     "#444444",
+      semDados:  "#c8c8c0",
+      fonte:     "#333333",
+      separador: "#d0cfc8",
+      moldura:   "rgba(255,255,255,0.85)",
+      insetFundo: "rgba(242,241,236,0.94)",
+      insetTerra: "#d5d4cc",
+      insetBorda: "rgba(0,0,0,0.12)",
+      calloutFundo: "rgba(242,241,236,0.95)",
+      calloutBorda: "rgba(0,0,0,0.08)",
+      mapFallback: "#e0dfd8",
+      sombraBase: 0.03,
+    },
+    escuro: {
+      fundo:     "#0d0f17",
+      titulo:    "#e2e8f0",
+      subtitulo: "#a0aec0",
+      texto:     "#a0aec0",
+      sutil:     "#718096",
+      marca:     "#4a5568",
+      barra:     "#4299e1",
+      semDados:  "#2d3748",
+      fonte:     "#a0aec0",
+      separador: "#2d3748",
+      moldura:   "rgba(45,55,72,0.8)",
+      insetFundo: "rgba(13,15,23,0.94)",
+      insetTerra: "#1a2030",
+      insetBorda: "rgba(255,255,255,0.1)",
+      calloutFundo: "rgba(13,15,23,0.95)",
+      calloutBorda: "rgba(255,255,255,0.08)",
+      mapFallback: "#1a1d2e",
+      sombraBase: 0.08,
+    },
+  };
+  const cor = PALETAS[tema] ?? PALETAS.claro;
+
+  const titulo = tituloCustom || (METRICA_LABEL_LONGO[metrica] ?? metrica);
+  let geo = "Brasil";
+  if (filtros.cod_uf) geo = UF_NOMES_COMPLETOS[filtros.cod_uf] ?? geo;
+  const [fonteSigla, fonteDesc] = obterFonte(metrica);
+  const geometria = nivelMeta?.geometria ?? nivel;
+  const temF = temFiltrosAtivos(filtros);
+  const filtrosLines = temF ? filtrosTexto(filtros, cid10Labels) : [];
+
+  // ── Pre-medir textos ──
+  const tmpC = document.createElement("canvas"); tmpC.width = W; tmpC.height = 10;
+  const tmpCtx = tmpC.getContext("2d");
+
+  // Titulo: fonte display, ate 3 linhas (52pt — referencia @espacialidade)
+  const tituloFont = `800 ${52*S}px ${FF}`;
+  const tituloLinhas = quebrarTexto(tmpCtx, titulo, contentW, tituloFont);
+  const tituloLineH = 62 * S;
+  const tituloH = tituloLinhas.length * tituloLineH;
+
+  // Descricao para overlay no mapa
+  const descricaoAuto =
+    `Distribuicao espacial de ${(METRICA_LABEL_LONGO[metrica] ?? metrica).charAt(0).toLowerCase() + (METRICA_LABEL_LONGO[metrica] ?? metrica).slice(1)} ` +
+    `por ${geometria}. Dados processados a partir de ` +
+    `${fonteDesc}. Base cartografica: IBGE, Malha Municipal 2022.`;
+  const descricao = textoExplicativo || descricaoAuto;
+
+  // ── Dimensoes do mapa (proporcao customizavel) ──
+  const mapAR = mapCanvas.height / mapCanvas.width;
+  const PROP_MAP = { "4:3": 3/4, "1:1": 1, "3:4": 4/3, "16:9": 9/16 };
+  const targetAR = PROP_MAP[proporcao] ?? null;
+  // Auto: minimo 0.85 evita cartas achatadas em monitores widescreen
+  const effectiveAR = targetAR ?? Math.max(mapAR, 0.85);
+  const mapH = Math.round(contentW * effectiveAR);
+
+  // ── Layout vertical (mapa dominante, tipografia generosa) ──
+  const brandH = 28*S, barH = 5*S, gapBrand = 14*S;
+  const gapTitSub = 10*S, subH = 44*S, gapSubMap = 18*S;
+  const gapMapLeg = 20*S;
+  const legSwatchH = 45*S, legLabelH = 51*S, legUnitH = 42*S;
+  const legH = mostrarLegenda ? legLabelH + legSwatchH + legUnitH + 10*S : 0;
+  const sepH = 1;
+  const filtrosH = filtrosLines.length > 0 ? 36*S : 0;
+  // Descricao abaixo da legenda — só quando overlay está desligado mas há texto explicativo
+  const descFont = `${27*S}px ${FF}`;
+  const descMaxW = contentW * 0.88;
+  const descAbaixo = !mostrarDescricao && textoExplicativo;
+  const descLinhas = descAbaixo ? quebrarTexto(tmpCtx, descricao, descMaxW, descFont) : [];
+  const descLineH = 36 * S;
+  const descH = descLinhas.length > 0 ? descLinhas.length * descLineH + 10 * S : 0;
+  const footerH = 120*S;
+  const gapFoot = 14*S;
+
+  const temBlocoExtra = descH > 0 || filtrosLines.length > 0;
+  const blocoExtraH = temBlocoExtra ? 14*S + sepH + 14*S + descH + filtrosH : 0;
+  const H = PAD + brandH + barH + gapBrand + tituloH + gapTitSub + subH + gapSubMap
+          + mapH + gapMapLeg + legH + blocoExtraH
+          + gapFoot + footerH + PAD;
+
+  // ── Canvas ──
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = cor.fundo; ctx.fillRect(0, 0, W, H);
+
+  let y = PAD;
+
+  // ═══ MARCA ═════════════════════════════════════════════════════════════════
+  ctx.fillStyle = cor.marca; ctx.font = `italic ${14*S}px ${FF}`;
+  ctx.fillText("@brasilemdadoslab", PAD, y + 16*S);
+  y += brandH;
+
+  // Barra de acento (mais larga, como referencia)
+  ctx.fillStyle = cor.barra; ctx.fillRect(PAD, y, 64*S, barH);
+  y += barH + gapBrand;
+
+  // ═══ TITULO ════════════════════════════════════════════════════════════════
+  ctx.fillStyle = cor.titulo; ctx.font = tituloFont;
+  for (const linha of tituloLinhas) {
+    ctx.fillText(linha, PAD, y + 48*S);
+    y += tituloLineH;
+  }
+  y += gapTitSub;
+
+  // ═══ SUBTITULO (geo | ano) ═════════════════════════════════════════════════
+  ctx.fillStyle = cor.subtitulo; ctx.font = `300 ${36*S}px ${FF}`;
+  ctx.fillText(`${geo}  \u2502  ${ano}`, PAD, y + 36*S);
+  y += subH + gapSubMap;
+
+  // ═══ MAPA (sem moldura — direto, limpo, como a referencia) ═════════════════
+  const mapX = PAD, mapY = y;
+
+  // Mapa (recorte central para proporcao desejada)
+  if (mapExportavel) {
+    try {
+      const srcW = mapCanvas.width;
+      const srcH_full = mapCanvas.height;
+      const desiredSrcH = srcW * effectiveAR;
+      let srcX = 0, srcY = 0, srcCropW = srcW, srcCropH = srcH_full;
+      if (desiredSrcH <= srcH_full) {
+        srcCropH = desiredSrcH;
+        srcY = (srcH_full - desiredSrcH) / 2;
+      } else {
+        srcCropW = srcH_full / effectiveAR;
+        srcX = (srcW - srcCropW) / 2;
+      }
+      ctx.drawImage(mapCanvas,
+        Math.max(0, srcX), Math.max(0, srcY), srcCropW, srcCropH,
+        mapX, mapY, contentW, mapH);
+    } catch (_) { mapExportavel = false; }
+  }
+  if (!mapExportavel) {
+    ctx.fillStyle = cor.mapFallback; ctx.fillRect(mapX, mapY, contentW, mapH);
+    ctx.fillStyle = cor.sutil; ctx.font = `${14*S}px ${FF}`; ctx.textAlign = "center";
+    ctx.fillText("Mapa indisponivel (CORS) \u2014 desative o satelite",
+                 mapX + contentW / 2, mapY + mapH / 2);
+    ctx.textAlign = "left";
+  }
+
+  // ── Overlay: bloco de texto indicador (bottom-left do mapa) ──
+  if (mostrarDescricao) {
+    // Overlay limita-se a no maximo 35% da largura do conteudo
+    const overlayW = Math.min(300*S, contentW * 0.35);
+    const oPad = 16*S;
+    const oTitFont = Math.round(27*S);
+    const oDescFont = Math.round(21*S);
+    const oTitLineH = Math.round(34*S);
+    const oDescLineH = Math.round(28*S);
+    const indicadorLabel = METRICA_LABEL_CURTO[metrica] ?? metrica;
+    const overlayDescLinhas = quebrarTexto(ctx, descricao, overlayW - 2*oPad, `${oDescFont}px ${FF}`);
+    const overlayDescH = overlayDescLinhas.length * oDescLineH;
+    const overlayTituloLinhas = quebrarTexto(ctx, indicadorLabel, overlayW - 2*oPad, `bold ${oTitFont}px ${FF}`);
+    const overlayTituloH = overlayTituloLinhas.length * oTitLineH;
+    const overlayH = 12*S + 18*S + overlayTituloH + 8*S + overlayDescH + 16*S;
+    const ox = mapX + 14*S, oy = mapY + mapH - overlayH - 14*S;
+
+    ctx.fillStyle = cor.calloutFundo;
+    ctx.beginPath(); ctx.roundRect(ox, oy, overlayW, overlayH, 8*S); ctx.fill();
+    ctx.strokeStyle = cor.calloutBorda; ctx.lineWidth = 1*S;
+    ctx.beginPath(); ctx.roundRect(ox, oy, overlayW, overlayH, 8*S); ctx.stroke();
+
+    // Barra de acento
+    ctx.fillStyle = cor.barra;
+    ctx.fillRect(ox + oPad, oy + 14*S, 40*S, 5*S);
+
+    // Titulo do indicador
+    ctx.fillStyle = cor.titulo; ctx.font = `bold ${oTitFont}px ${FF}`;
+    let oTY = oy + 12*S + 18*S;
+    for (const tl of overlayTituloLinhas) {
+      ctx.fillText(tl, ox + oPad, oTY + oTitFont);
+      oTY += oTitLineH;
+    }
+    oTY += 8*S;
+
+    // Descricao dentro do overlay
+    ctx.fillStyle = cor.sutil; ctx.font = `${oDescFont}px ${FF}`;
+    for (const dl of overlayDescLinhas) {
+      ctx.fillText(dl, ox + oPad, oTY + oDescFont);
+      oTY += oDescLineH;
+    }
+  }
+
+  // ── Overlay: inset de localizacao (sobre o overlay de texto ou acima dele) ──
+  if (filtros.cod_uf && mostrarLocalizador) {
+    const iW = 86*S, iH = 76*S;
+    const ix = mapX + 14*S, iy = mapY + 14*S;
+    ctx.fillStyle = cor.insetFundo;
+    ctx.beginPath(); ctx.roundRect(ix, iy, iW, iH, 4*S); ctx.fill();
+    ctx.strokeStyle = cor.insetBorda; ctx.lineWidth = 1*S;
+    ctx.beginPath(); ctx.roundRect(ix, iy, iW, iH, 4*S); ctx.stroke();
+
+    const proj = (lon, lat) => [ix + 8*S + ((lon + 75) / 42) * (iW - 16*S),
+                                iy + 8*S + ((6 - lat) / 40.5) * (iH - 16*S)];
+    ctx.beginPath();
+    BRASIL_CONTORNO.forEach(([lo, la], i) => {
+      const [px, py] = proj(lo, la);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = cor.insetTerra; ctx.fill();
+    ctx.strokeStyle = cor.sutil; ctx.lineWidth = 0.8; ctx.stroke();
+    if (UF_CENTROIDS[filtros.cod_uf]) {
+      const [lo, la] = UF_CENTROIDS[filtros.cod_uf], [px, py] = proj(lo, la);
+      ctx.beginPath(); ctx.arc(px, py, 4*S, 0, Math.PI * 2);
+      ctx.fillStyle = "#c62828"; ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5*S; ctx.stroke();
+    }
+  }
+
+  // ── Overlay: callout de destaque (bottom-right do mapa) ──
+  if (opts.featureSelecionada && mostrarDestaque) {
+    const p = opts.featureSelecionada.properties ?? {};
+    const nome = p.nome_municipio || p.nome || p.sigla || "";
+    const valorF = formatarMetrica(p.valor_metrica, metrica);
+    if (valorF && nome) {
+      const cardW = Math.min(230*S, contentW * 0.28);
+      const cardH = Math.round(cardW * 0.43);
+      const cPad = Math.round(16*S);
+      const cx = mapX + contentW - cardW - 14*S;
+      const cy = mapY + mapH - cardH - 14*S;
+      ctx.fillStyle = cor.calloutFundo;
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 6*S); ctx.fill();
+      ctx.strokeStyle = cor.calloutBorda; ctx.lineWidth = 1*S;
+      ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 6*S); ctx.stroke();
+
+      // Valor grande
+      ctx.fillStyle = cor.titulo; ctx.font = `bold ${34*S}px ${FF}`;
+      ctx.textAlign = "right";
+      ctx.fillText(`${valorF.texto}${valorF.unidade}`, cx + cardW - cPad, cy + cardH * 0.38);
+
+      // Nome do municipio/UF
+      ctx.font = `bold ${14*S}px ${FF}`;
+      ctx.fillStyle = cor.subtitulo;
+      const ufSigla = p.uf || p.sigla_uf || "";
+      const nomeCompleto = ufSigla ? `${nome} - ${ufSigla}` : nome;
+      ctx.fillText(nomeCompleto, cx + cardW - cPad, cy + cardH * 0.62);
+
+      // Label contextual
+      ctx.font = `italic ${10*S}px ${FF}`;
+      ctx.fillStyle = cor.sutil;
+      const metricaLbl = METRICA_LABEL_CURTO[metrica] ?? metrica;
+      ctx.fillText(metricaLbl, cx + cardW - cPad, cy + cardH * 0.82);
+      ctx.textAlign = "left";
+    }
+  }
+
+  y += mapH + gapMapLeg;
+
+  // ═══ LEGENDA (horizontal, labels acima dos swatches) ═══════════════════════
+  if (mostrarLegenda) {
+    const N_CLASSES = 5;
+    const span = range.max - range.min;
+    const breaks = [];
+    for (let i = 0; i <= N_CLASSES; i++) breaks.push(range.min + (i / N_CLASSES) * span);
+
+    const fmtSample = formatarMetrica(range.max, metrica);
+    const unidade = fmtSample?.unidade ?? "";
+    const fmtCurto = (v) => {
+      const f = formatarMetrica(v, metrica);
+      return f ? f.texto : String(Math.round(v));
+    };
+
+    const swatchGap = 6 * S;
+    const totalItems = N_CLASSES + 1;
+    const itemW = Math.floor((contentW - (totalItems - 1) * swatchGap) / totalItems);
+    const swatchR = 3 * S;
+
+    for (let i = 0; i < N_CLASSES; i++) {
+      const sx = PAD + i * (itemW + swatchGap);
+      const t = (i + 0.5) / N_CLASSES;
+      const [r, g, b] = interpolaRGB(t, invertida);
+
+      ctx.fillStyle = cor.texto; ctx.font = `${27*S}px ${FF}`;
+      let label;
+      if (i === 0)
+        label = `Ate ${fmtCurto(breaks[1])}`;
+      else if (i === N_CLASSES - 1)
+        label = `> ${fmtCurto(breaks[N_CLASSES - 1])}`;
+      else
+        label = `${fmtCurto(breaks[i])} - ${fmtCurto(breaks[i + 1])}`;
+      ctx.fillText(label, sx, y + legLabelH - 4*S);
+
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.beginPath(); ctx.roundRect(sx, y + legLabelH, itemW, legSwatchH, swatchR); ctx.fill();
+    }
+
+    const sdX = PAD + N_CLASSES * (itemW + swatchGap);
+    ctx.fillStyle = cor.texto; ctx.font = `${27*S}px ${FF}`;
+    ctx.fillText("Sem dados", sdX, y + legLabelH - 4*S);
+    ctx.fillStyle = cor.semDados;
+    ctx.beginPath(); ctx.roundRect(sdX, y + legLabelH, itemW, legSwatchH, swatchR); ctx.fill();
+
+    if (unidade.trim()) {
+      ctx.fillStyle = cor.sutil; ctx.font = `italic ${24*S}px ${FF}`;
+      ctx.fillText(`Valores em ${unidade.trim()}`, PAD, y + legLabelH + legSwatchH + 32*S);
+    }
+    y += legH;
+  }
+
+  // ═══ DESCRICAO / FILTROS (abaixo da legenda) ════════════════════════════════
+  if (temBlocoExtra) {
+    y += 14*S;
+    ctx.strokeStyle = cor.separador; ctx.lineWidth = sepH;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    y += sepH + 14*S;
+
+    if (descAbaixo && descLinhas.length > 0) {
+      ctx.fillStyle = cor.sutil; ctx.font = descFont;
+      for (const dl of descLinhas) {
+        ctx.fillText(dl, PAD, y + 12*S);
+        y += descLineH;
+      }
+    }
+
+    if (filtrosLines.length > 0) {
+      if (descLinhas.length > 0) y += 4*S;
+      ctx.fillStyle = cor.subtitulo; ctx.font = `bold ${23*S}px ${FF}`;
+      ctx.fillText("Filtros: ", PAD, y + 16*S);
+      const filtroX = PAD + ctx.measureText("Filtros: ").width;
+      ctx.fillStyle = cor.texto; ctx.font = `${23*S}px ${FF}`;
+      ctx.fillText(filtrosLines.join("  \u2022  "), filtroX, y + 10*S);
+      y += filtrosH;
+    }
+  }
+
+  y += gapFoot;
+
+  // ═══ RODAPE (estruturado: fonte/elaboracao esquerda, norte/escala direita) ══
+  ctx.strokeStyle = cor.separador; ctx.lineWidth = sepH;
+  ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+  y += 12*S;
+
+  // Fonte (esquerda, linha 1)
+  ctx.font = `bold ${20*S}px ${FF}`; ctx.fillStyle = cor.fonte;
+  const fonteLabel = "Fonte: ";
+  ctx.fillText(fonteLabel, PAD, y + 24*S);
+  const fonteLabelW = ctx.measureText(fonteLabel).width;
+  ctx.font = `${20*S}px ${FF}`; ctx.fillStyle = cor.texto;
+  ctx.fillText(`${fonteDesc} \u2014 ${fonteSigla}`, PAD + fonteLabelW, y + 24*S);
+
+  // Elaboracao (esquerda, linha 2)
+  const d = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+  ctx.font = `bold ${20*S}px ${FF}`; ctx.fillStyle = cor.fonte;
+  const elabLabel = "Elaboracao: ";
+  ctx.fillText(elabLabel, PAD, y + 52*S);
+  const elabLabelW = ctx.measureText(elabLabel).width;
+  ctx.font = `${20*S}px ${FF}`; ctx.fillStyle = cor.texto;
+  ctx.fillText(`brasilemdados.ia.br (${d})`, PAD + elabLabelW, y + 52*S);
+
+  // Coordenadas (esquerda, linha 3 — discretas)
+  if (mostrarCoordenadas) {
+    ctx.fillStyle = cor.sutil; ctx.font = `${18*S}px ${FF}`;
+    const coordN = fmtCoord(bounds.north, "lat"), coordS = fmtCoord(bounds.south, "lat");
+    const coordW = fmtCoord(bounds.west, "lon"), coordE = fmtCoord(bounds.east, "lon");
+    ctx.fillText(`${coordN}/${coordS}  ${coordW}/${coordE}  |  SIRGAS 2000`, PAD, y + 78*S);
+  }
+
+  // Norte + escala (canto direito)
+  if (mostrarNorte) {
+    const nX = W - PAD - 24*S;
+
+    // Norte: triangulo com metade preenchida (convencao cartografica)
+    const nTop = y + 8*S, nBot = y + 40*S, nW = 13*S;
+    // Metade esquerda preenchida
+    ctx.fillStyle = cor.subtitulo;
+    ctx.beginPath();
+    ctx.moveTo(nX, nTop); ctx.lineTo(nX - nW, nBot); ctx.lineTo(nX, nBot * 0.4 + nTop * 0.6);
+    ctx.closePath(); ctx.fill();
+    // Metade direita apenas contorno
+    ctx.strokeStyle = cor.subtitulo; ctx.lineWidth = 2*S; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(nX, nTop); ctx.lineTo(nX + nW, nBot); ctx.lineTo(nX, nBot * 0.4 + nTop * 0.6);
+    ctx.closePath(); ctx.stroke();
+    // Haste
+    ctx.lineWidth = 1.5*S;
+    ctx.beginPath(); ctx.moveTo(nX, nBot); ctx.lineTo(nX, y + 56*S); ctx.stroke();
+    ctx.lineCap = "butt";
+
+    // Escala grafica (a esquerda do norte, mesma linha base)
+    const mppScreen = metrosPorPixel(viewState.latitude, viewState.zoom);
+    const mppReport = mppScreen * (mapCanvas.width / contentW);
+    const esc = calcularEscala(mppReport, 100*S);
+    const escEndX = nX - 36*S;
+    const escStartX = escEndX - esc.px;
+    const escY = y + 50*S;
+    ctx.strokeStyle = cor.subtitulo; ctx.lineWidth = 2*S;
+    ctx.beginPath(); ctx.moveTo(escStartX, escY); ctx.lineTo(escEndX, escY); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(escStartX, escY - 6*S); ctx.lineTo(escStartX, escY + 6*S);
+    ctx.moveTo(escEndX, escY - 6*S); ctx.lineTo(escEndX, escY + 6*S);
+    ctx.stroke();
+    ctx.fillStyle = cor.texto; ctx.font = `${23*S}px ${FF}`; ctx.textAlign = "right";
+    ctx.fillText(esc.label, escEndX, escY - 10*S);
+    ctx.textAlign = "left";
+  }
+
+  // ═══ EXPORTAR ou RETORNAR ═══════════════════════════════════════════════
+  if (returnCanvas) return canvas;
+  try {
+    const link = document.createElement("a");
+    link.download = `carta_${metrica}_${ano}_${tema}.jpg`;
+    link.href = canvas.toDataURL("image/jpeg", 0.94);
     link.click();
   } catch (e) {
     alert("Erro ao exportar: canvas contaminado por CORS.\nDesative o satelite e tente novamente.");

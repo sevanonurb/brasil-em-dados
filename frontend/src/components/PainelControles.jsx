@@ -126,7 +126,6 @@ export const GRUPOS_METRICAS = [
   {
     label: "Domicílios e Habitação (Censo 2022)",
     opcoes: [
-      { value: "media_moradores",             label: "Média de moradores por domicílio" },
       { value: "domicilios_internet",         label: "Domicílios com internet (%)" },
       { value: "domicilios_maquina_lavar",    label: "Domicílios com máquina de lavar (%)" },
       { value: "domicilios_alugados",         label: "Domicílios alugados (%)" },
@@ -137,6 +136,16 @@ export const GRUPOS_METRICAS = [
       { value: "pct_urbano",                  label: "Pop. urbana (%)" },
       { value: "pct_alvenaria",               label: "Domicílios com paredes de alvenaria (%)" },
       { value: "pct_banheiro_exclusivo",      label: "Moradores com banheiro exclusivo (%)" },
+    ],
+  },
+  {
+    label: "Território — Setor Censitário (Censo 2022)",
+    opcoes: [
+      { value: "densidade_domiciliar",        label: "Densidade domiciliar (domic./km²)" },
+      { value: "media_moradores",             label: "Média de moradores por domicílio" },
+      { value: "populacao_absoluta",          label: "População residente (absoluta)" },
+      { value: "domicilios_absoluto",         label: "Domicílios particulares (absoluto)" },
+      { value: "area_territorial",            label: "Área territorial (km²)" },
     ],
   },
   {

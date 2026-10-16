@@ -14,7 +14,7 @@ export function Legenda({ metrica, min, max, semDados = false, invertida = false
     ? "↑ melhor"
     : METRICAS_SAUDE_SET.has(metrica)
       ? "↑ maior risco"
-      : metrica === "densidade_pop"
+      : (metrica === "densidade_pop" || metrica === "densidade_domiciliar")
         ? "↑ mais denso"
         : "↑ maior valor";
 

@@ -82,6 +82,10 @@ cp .env frontend/.env
 docker compose up -d
 ```
 
+## Vite build config
+
+`frontend/vite.config.js` splits large dependencies into separate chunks (`maplibre`, `deckgl`, `react-vendor`) via `manualChunks`. The dev server proxies `/tiles` to Martin at `localhost:3000`. Build target is `esnext`. `apache-arrow` and `maplibre-gl` are pre-bundled via `optimizeDeps.include`.
+
 ## node_modules patches (postinstall)
 
 `frontend/patches/apply-patches.sh` patches two packages after `npm install`:
@@ -211,7 +215,7 @@ The `setAnosDisponiveis` action also auto-corrects the selected year if it's no 
 
 ### Metadata API (`api/server.py`)
 
-Minimal stdlib Python HTTP server (no framework). Runs as the `brasil_api` container (internal port 8001, no external port). Exposes `GET /anos` only. The Python server sets `Access-Control-Allow-Origin: *` — do **not** also set it in the nginx `location /api/` block or the browser will reject due to duplicate CORS headers.
+Minimal stdlib Python HTTP server (no framework). Runs as the `brasil_api` container (internal port 8001, no external port). Exposes `GET /anos`, `GET /municipios`, and `GET /health`. The Python server sets `Access-Control-Allow-Origin: *` on all responses (including 404/500). Nginx sets CORS only on the `location /` block (Martin tiles) — do **not** add it to the `location /api/` block or the browser will reject due to duplicate CORS headers. Error responses return `{"error": "internal server error"}` — raw exceptions are logged server-side only.
 
 `FALLBACK` dict in `server.py` must mirror `ANOS_POR_METRICA_DEFAULT` in `cross_filter.js` — both must be updated when adding a new metric.
 
@@ -228,6 +232,26 @@ Single source of truth for metric labels and formatting. Contains:
 ### Cartographic report export (`frontend/src/utils/report.js`)
 
 Generates ABNT NBR 15777–compliant thematic map cards (PNG/PDF) using Canvas 2D API (no external dependencies). Captures the map via `map.getCanvas()` (requires `preserveDrawingBuffer: true` on MapLibre). Elements: title, legend with tick marks, scale bar (meters-per-pixel corrected for report scaling), north arrow, SIRGAS 2000/EPSG:3857 metadata, geographic coordinates, data source, inset locator map (when UF filter is active). PDF is raw ISO 32000-1 with JPEG XObject (A3 landscape).
+
+### Frontend components
+
+The UI is composed of a single-page app in `frontend/src/main.jsx` (map orchestration, state, layers) plus 6 panel components:
+
+- `PainelControles.jsx` — metric/year/filter selection dropdowns; defines `GRUPOS_METRICAS` (the master metric menu structure)
+- `PainelDetalhes.jsx` — drill-down info panel shown on municipality/setor click
+- `PainelVisual.jsx` — non-data visual settings (opacity, borders, labels, satellite, comparison mode)
+- `PainelExportar.jsx` — cartographic report export panel with live preview canvas
+- `Legenda.jsx` — floating color scale legend on the map
+- `BuscaMunicipio.jsx` — municipality search autocomplete (calls `GET /api/municipios`)
+
+No test framework is configured. No linter/formatter is set up. The only npm scripts are `dev`, `build`, `preview`.
+
+### Brand identity
+
+- Instagram: `@brasilemdadoslab`
+- Website: `brasilemdados.ia.br`
+
+These appear in export footers (`report.js`) and must stay consistent.
 
 ### Visual controls (`frontend/src/components/PainelVisual.jsx`)
 

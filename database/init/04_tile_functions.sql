@@ -106,6 +106,14 @@ BEGIN
                     econ.despesa_educacao_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     u.populacao_2022::FLOAT8 / NULLIF(u.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'densidade_domiciliar' THEN
+                    san.total_domicilios_total / NULLIF(u.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'populacao_absoluta' THEN
+                    u.populacao_2022::FLOAT8
+                WHEN v_metrica = 'domicilios_absoluto' THEN
+                    san.total_domicilios_total
+                WHEN v_metrica = 'area_territorial' THEN
+                    u.area_km2::FLOAT8
                 WHEN v_metrica = 'acesso_agua' THEN
                     san.com_agua_rede_total / NULLIF(san.total_domicilios_total, 0) * 100
                 WHEN v_metrica = 'acesso_esgoto' THEN
@@ -313,6 +321,14 @@ BEGIN
                     e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'densidade_pop' THEN
                     m.populacao_2022::FLOAT8 / NULLIF(m.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'densidade_domiciliar' THEN
+                    dm.total_domicilios::FLOAT8 / NULLIF(m.area_km2::FLOAT8, 0)
+                WHEN v_metrica = 'populacao_absoluta' THEN
+                    m.populacao_2022::FLOAT8
+                WHEN v_metrica = 'domicilios_absoluto' THEN
+                    dm.total_domicilios::FLOAT8
+                WHEN v_metrica = 'area_territorial' THEN
+                    m.area_km2::FLOAT8
                 WHEN v_metrica = 'acesso_agua' THEN
                     dm.com_agua_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
                 WHEN v_metrica = 'acesso_esgoto' THEN
@@ -394,8 +410,9 @@ DECLARE
     v_faixa_max   SMALLINT := COALESCE((query_params->>'faixa_etaria_max')::SMALLINT, 17);
     v_sexo        CHAR(1)  := NULLIF(query_params->>'sexo', '');
 BEGIN
-    -- z < 6: centroides (dots) — todos os setores como pontos coloridos.
-    -- Usa fontes primárias com v_ano dinâmico (sem materialized view hardcoded).
+    -- z < 6: polígonos territoriais simplificados — setores como território, não dots.
+    -- (centroide e polígono geram tiles do mesmo tamanho ~4MB aqui; o ponto só
+    --  prejudicava a leitura). Usa fontes primárias com v_ano dinâmico.
     IF z < 6 THEN
         SELECT ST_AsMVT(tile, 'setores', 4096, 'geom_mvt')
         INTO result
@@ -425,7 +442,9 @@ BEGIN
                   AND v_metrica NOT IN (
                       'taxa_mortalidade', 'taxa_homicidio', 'pib_per_capita',
                       'receita_per_capita', 'despesa_saude_per_capita',
-                      'despesa_educacao_per_capita', 'densidade_pop'
+                      'despesa_educacao_per_capita', 'densidade_pop',
+                      'densidade_domiciliar', 'media_moradores',
+                      'populacao_absoluta', 'domicilios_absoluto', 'area_territorial'
                   )
                   AND mm.cod_municipio IN (
                       SELECT DISTINCT sc2.cod_municipio
@@ -438,6 +457,8 @@ BEGIN
                 sc.cod_setor,
                 sc.cod_municipio,
                 sc.populacao_total,
+                sc.domicilios_total,
+                sc.area_km2,
                 CASE
                     WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                         ROUND((COALESCE(ma.contagem, 0) * 100000.0
@@ -452,9 +473,19 @@ BEGIN
                         e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                     WHEN v_metrica = 'densidade_pop' THEN
                         sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
+                    WHEN v_metrica = 'densidade_domiciliar' THEN
+                        sc.domicilios_total::FLOAT8 / NULLIF(sc.area_km2, 0)
+                    WHEN v_metrica = 'media_moradores' THEN
+                        sc.populacao_total::FLOAT8 / NULLIF(sc.domicilios_total::FLOAT8, 0)
+                    WHEN v_metrica = 'populacao_absoluta' THEN
+                        sc.populacao_total::FLOAT8
+                    WHEN v_metrica = 'domicilios_absoluto' THEN
+                        sc.domicilios_total::FLOAT8
+                    WHEN v_metrica = 'area_territorial' THEN
+                        sc.area_km2::FLOAT8
                     ELSE mm2.valor
                 END AS valor_metrica,
-                ST_AsMVTGeom(ST_Centroid(sc.geom_3857), bbox_3857, 4096, 4, true) AS geom_mvt
+                ST_AsMVTGeom(sc.geom_3857_simplified, bbox_3857, 4096, 16, true) AS geom_mvt
             FROM geo.setores_censitarios sc
             JOIN geo.municipios m ON m.cod_ibge_7 = sc.cod_municipio
             LEFT JOIN economia.siconfi_municipios e
@@ -499,7 +530,9 @@ BEGIN
                   AND v_metrica NOT IN (
                       'taxa_mortalidade', 'taxa_homicidio', 'pib_per_capita',
                       'receita_per_capita', 'despesa_saude_per_capita',
-                      'despesa_educacao_per_capita', 'densidade_pop'
+                      'despesa_educacao_per_capita', 'densidade_pop',
+                      'densidade_domiciliar', 'media_moradores',
+                      'populacao_absoluta', 'domicilios_absoluto', 'area_territorial'
                   )
                   AND mm.cod_municipio IN (
                       SELECT DISTINCT sc2.cod_municipio
@@ -512,6 +545,8 @@ BEGIN
                 sc.cod_setor,
                 sc.cod_municipio,
                 sc.populacao_total,
+                sc.domicilios_total,
+                sc.area_km2,
                 CASE
                     WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                         ROUND((COALESCE(ma.contagem, 0) * 100000.0
@@ -526,6 +561,16 @@ BEGIN
                         e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                     WHEN v_metrica = 'densidade_pop' THEN
                         sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0)
+                    WHEN v_metrica = 'densidade_domiciliar' THEN
+                        sc.domicilios_total::FLOAT8 / NULLIF(sc.area_km2, 0)
+                    WHEN v_metrica = 'media_moradores' THEN
+                        sc.populacao_total::FLOAT8 / NULLIF(sc.domicilios_total::FLOAT8, 0)
+                    WHEN v_metrica = 'populacao_absoluta' THEN
+                        sc.populacao_total::FLOAT8
+                    WHEN v_metrica = 'domicilios_absoluto' THEN
+                        sc.domicilios_total::FLOAT8
+                    WHEN v_metrica = 'area_territorial' THEN
+                        sc.area_km2::FLOAT8
                     ELSE mm2.valor
                 END AS valor_metrica,
                 ST_AsMVTGeom(sc.geom_3857, bbox_3857, 4096, 4, true) AS geom_mvt
@@ -596,6 +641,7 @@ BEGIN
             sc.tipo_setor,
             sc.domicilios_total,
             sc.populacao_total,
+            sc.area_km2,
             CASE
                 WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
@@ -619,9 +665,20 @@ BEGIN
                     e.despesa_saude::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
                 WHEN v_metrica = 'despesa_educacao_per_capita' THEN
                     e.despesa_educacao::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
-                -- densidade_pop: dado genuíno por setor censitário (Censo 2022)
+                -- Métricas genuínas por setor censitário (Censo 2022) — variam
+                -- dentro do município, ao contrário das herdadas no ELSE.
                 WHEN v_metrica = 'densidade_pop' THEN
                     (sc.populacao_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                WHEN v_metrica = 'densidade_domiciliar' THEN
+                    (sc.domicilios_total::FLOAT8 / NULLIF(sc.area_km2, 0))
+                WHEN v_metrica = 'media_moradores' THEN
+                    (sc.populacao_total::FLOAT8 / NULLIF(sc.domicilios_total::FLOAT8, 0))
+                WHEN v_metrica = 'populacao_absoluta' THEN
+                    sc.populacao_total::FLOAT8
+                WHEN v_metrica = 'domicilios_absoluto' THEN
+                    sc.domicilios_total::FLOAT8
+                WHEN v_metrica = 'area_territorial' THEN
+                    sc.area_km2::FLOAT8
                 WHEN v_metrica = 'acesso_agua' THEN
                     dm.com_agua_rede::FLOAT8 / NULLIF(dm.total_domicilios::FLOAT8, 0) * 100
                 WHEN v_metrica = 'acesso_esgoto' THEN
@@ -779,6 +836,11 @@ BEGIN
         SELECT
             m.nome,
             m.populacao_2022::FLOAT8 AS populacao,
+            COALESCE(m.capital, FALSE) AS capital,
+            -- Prioridade: capitais primeiro, depois por população (desc)
+            -- symbol-sort-key ordena ascendente, então valores menores = mais prioridade
+            CASE WHEN m.capital THEN 0 ELSE 1 END * 100000000
+              - COALESCE(m.populacao_2022, 0) AS prioridade,
             ST_AsMVTGeom(
                 ST_Transform(ST_Centroid(m.geom), 3857),
                 bbox_3857, 4096, 64, true
@@ -788,6 +850,41 @@ BEGIN
           -- Pré-filtro de bbox em SRID nativo (4674) → usa o índice GIST de m.geom,
           -- evita ST_Transform em todas as linhas antes do teste espacial.
           AND m.geom && bbox_4674
+    ) t;
+
+    RETURN COALESCE(result, ''::bytea);
+END;
+$$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Labels de UFs (sigla + nome nos zooms baixos)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION api.tiles_labels_ufs(
+    z            INT,
+    x            INT,
+    y            INT,
+    query_params JSON DEFAULT '{}'
+)
+RETURNS bytea AS $$
+DECLARE
+    result    bytea;
+    bbox_3857 geometry := ST_TileEnvelope(z, x, y);
+    bbox_4674 geometry := ST_Transform(ST_TileEnvelope(z, x, y), 4674);
+BEGIN
+    SELECT ST_AsMVT(t, 'labels_ufs', 4096, 'geom_mvt')
+    INTO result
+    FROM (
+        SELECT
+            u.sigla,
+            u.nome,
+            u.populacao_2022::FLOAT8 AS populacao,
+            -COALESCE(u.populacao_2022, 0) AS prioridade,
+            ST_AsMVTGeom(
+                ST_Transform(ST_PointOnSurface(u.geom), 3857),
+                bbox_3857, 4096, 256, true
+            ) AS geom_mvt
+        FROM geo.ufs u
+        WHERE u.geom && bbox_4674
     ) t;
 
     RETURN COALESCE(result, ''::bytea);

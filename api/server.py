@@ -6,7 +6,9 @@ GET /anos → {"taxa_mortalidade": [2023, 2022, ...], ...}
 """
 import json
 import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psycopg2
 
@@ -26,6 +28,10 @@ FALLBACK = {
     "despesa_saude_per_capita":    [2022],
     "despesa_educacao_per_capita": [2022],
     "densidade_pop":               [2022],
+    "densidade_domiciliar":        [2022],
+    "populacao_absoluta":          [2022],
+    "domicilios_absoluto":         [2022],
+    "area_territorial":            [2022],
     # Saneamento — Censo 2022 (estático)
     "acesso_agua":                 [2022],
     "acesso_esgoto":               [2022],
@@ -104,6 +110,39 @@ FALLBACK = {
     # Registro Civil — Nupcialidade e Divorcialidade (dados carregados: 2023)
     "taxa_nupcialidade":           [2023],
     "taxa_divorcialidade":         [2023],
+    # PPM — Rebanhos (anual)
+    "rebanho_bovino_por_km2":      [2023, 2022, 2021, 2020, 2019],
+    "rebanho_bovino_por_hab":      [2023, 2022, 2021, 2020, 2019],
+    "rebanho_equino_por_hab":      [2023, 2022, 2021, 2020, 2019],
+    "rebanho_suino_por_hab":       [2023, 2022, 2021, 2020, 2019],
+    "rebanho_ovino_por_hab":       [2023, 2022, 2021, 2020, 2019],
+    "rebanho_caprino_por_hab":     [2023, 2022, 2021, 2020, 2019],
+    "rebanho_galinaceos_por_hab":  [2023, 2022, 2021, 2020, 2019],
+    # SINAN — Epidemiologia (anual)
+    "incidencia_dengue":           [2023, 2022, 2021, 2020, 2019],
+    "incidencia_tuberculose":      [2023, 2022, 2021, 2020, 2019],
+    "incidencia_hanseniase":       [2023, 2022, 2021, 2020, 2019],
+    "incidencia_leishmaniose":     [2023, 2022, 2021, 2020, 2019],
+    # SIH — Internações SUS (anual)
+    "taxa_internacao_sus":              [2023, 2022, 2021, 2020, 2019],
+    "taxa_internacao_cardiovascular":   [2023, 2022, 2021, 2020, 2019],
+    "taxa_internacao_respiratoria":     [2023, 2022, 2021, 2020, 2019],
+    "taxa_internacao_mental":           [2023, 2022, 2021, 2020, 2019],
+    "media_permanencia_sus":            [2023, 2022, 2021, 2020, 2019],
+    # Censo Escolar INEP — Rendimento (anual)
+    "taxa_aprovacao_ef":           [2024, 2023, 2022, 2021, 2020],
+    "taxa_reprovacao_ef":          [2024, 2023, 2022, 2021, 2020],
+    "taxa_abandono_ef":            [2024, 2023, 2022, 2021, 2020],
+    "taxa_aprovacao_em":           [2024, 2023, 2022, 2021, 2020],
+    "taxa_abandono_em":            [2024, 2023, 2022, 2021, 2020],
+    "distorcao_idade_serie_ef":    [2024, 2023, 2022, 2021, 2020],
+    "distorcao_idade_serie_em":    [2024, 2023, 2022, 2021, 2020],
+    # SENATRAN — Frota Veicular (dados carregados: 2020-2022)
+    "frota_automovel_por_1k":      [2022, 2021, 2020],
+    "frota_moto_por_1k":           [2022, 2021, 2020],
+    "frota_caminhao_por_1k":       [2022, 2021, 2020],
+    "frota_onibus_por_1k":         [2022, 2021, 2020],
+    "frota_total_por_1k":          [2022, 2021, 2020],
 }
 
 
@@ -155,6 +194,10 @@ def query_anos():
         "despesa_saude_per_capita":    anos_ec     or FALLBACK["despesa_saude_per_capita"],
         "despesa_educacao_per_capita": anos_ec     or FALLBACK["despesa_educacao_per_capita"],
         "densidade_pop":               [2022],
+        "densidade_domiciliar":        [2022],
+        "populacao_absoluta":          [2022],
+        "domicilios_absoluto":         [2022],
+        "area_territorial":            [2022],
         # Saneamento — Censo 2022 (estático)
         "acesso_agua":                 [2022],
         "acesso_esgoto":               [2022],
@@ -270,14 +313,39 @@ def query_anos():
     }
 
 
+# Cache TTL para /anos: evita 6 queries sequenciais no PostGIS a cada hit.
+# 60s é suficiente — anos novos só aparecem após rodar pipeline + refresh.
+_ANOS_TTL = 60.0
+_anos_cache: dict | None = None
+_anos_cache_ts: float = 0.0
+_anos_lock = threading.Lock()
+
+
+def query_anos_cached():
+    global _anos_cache, _anos_cache_ts
+    with _anos_lock:
+        if _anos_cache is not None and (time.monotonic() - _anos_cache_ts) < _ANOS_TTL:
+            return _anos_cache
+        _anos_cache = query_anos()
+        _anos_cache_ts = time.monotonic()
+        return _anos_cache
+
+
 _municipios_cache: list | None = None
+_municipios_lock = threading.Lock()
 
 
 def query_municipios() -> list:
     """Retorna lista de municípios com nome, UF e centróide (lon, lat)."""
     global _municipios_cache
-    if _municipios_cache is not None:
-        return _municipios_cache
+    with _municipios_lock:
+        if _municipios_cache is not None:
+            return _municipios_cache
+        return _query_municipios_db()
+
+
+def _query_municipios_db() -> list:
+    global _municipios_cache
     conn = psycopg2.connect(**DB)
     try:
         with conn.cursor() as cur:
@@ -314,7 +382,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/anos", "/anos/"):
             try:
-                data = query_anos()
+                data = query_anos_cached()
                 body = json.dumps(data).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -323,11 +391,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
             except Exception as exc:
+                import traceback; traceback.print_exc()
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(exc)}).encode())
+                self.wfile.write(json.dumps({"error": "internal server error"}).encode())
         elif self.path in ("/municipios", "/municipios/"):
             try:
                 data = query_municipios()
@@ -339,11 +408,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
             except Exception as exc:
+                import traceback; traceback.print_exc()
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": str(exc)}).encode())
+                self.wfile.write(json.dumps({"error": "internal server error"}).encode())
         elif self.path in ("/health", "/health/"):
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
@@ -351,7 +421,10 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(b"ok")
         else:
             self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
+            self.wfile.write(json.dumps({"error": "not found"}).encode())
 
     def log_message(self, fmt, *args):  # noqa: suppress access log
         pass
@@ -360,4 +433,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8001))
     print(f"[brasil-api] listening on :{port}", flush=True)
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    server.daemon_threads = True
+    server.serve_forever()

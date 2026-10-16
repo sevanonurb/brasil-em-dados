@@ -120,6 +120,12 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
             valor={p.populacao_2022 ?? p.populacao_total}
             decimais={0}
           />
+          {isSetor && (
+            <>
+              <Metrica label="Domicílios" valor={p.domicilios_total} decimais={0} />
+              <Metrica label="Área" valor={p.area_km2} unidade=" km²" decimais={2} />
+            </>
+          )}
         </Secao>
 
         {/* Geocódigo */}

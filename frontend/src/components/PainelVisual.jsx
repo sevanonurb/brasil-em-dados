@@ -34,7 +34,8 @@ function Toggle({ checked, onChange }) {
   );
 }
 
-function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick }) {
+function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick, formatValue }) {
+  const display = formatValue ? formatValue(value) : `${Math.round(value * 100)}%`;
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
@@ -53,7 +54,7 @@ function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick
             </button>
           )}
           <span style={{ fontSize: 11, color: "#e2e8f0", fontVariantNumeric: "tabular-nums", minWidth: 32, textAlign: "right" }}>
-            {Math.round(value * 100)}%
+            {display}
           </span>
         </div>
       </div>
@@ -147,7 +148,7 @@ const selectStyleMini = {
 export function PainelVisual({
   visual, onUpdate, onFlyTo,
   comparacao, onComparacaoUpdate,
-  onScreenshot, onReport, onFullscreen,
+  onScreenshot, onFullscreen,
   anosDisponiveis,
 }) {
   const [aberto, setAberto] = useState(false);
@@ -224,11 +225,34 @@ export function PainelVisual({
             />
           )}
           <ToggleRow
+            label="Nomes dos estados"
+            subLabel="Siglas das UFs nos zooms baixos"
+            checked={visual.mostrarNomesUF}
+            onChange={v => onUpdate("mostrarNomesUF", v)}
+          />
+          <ToggleRow
             label="Nomes das cidades"
-            subLabel="Rótulos de municípios e localidades"
+            subLabel="Rótulos de municípios por população"
             checked={visual.mostrarNomes}
             onChange={v => onUpdate("mostrarNomes", v)}
           />
+          {visual.mostrarNomes && (
+            <>
+              <SliderRow
+                label="Tamanho dos rótulos"
+                value={visual.tamanhoNomes ?? 1.0}
+                min={0.5} max={2.0} step={0.05}
+                onChange={v => onUpdate("tamanhoNomes", v)}
+                formatValue={v => `${Math.round(v * 100)}%`}
+              />
+              <ToggleRow
+                label="Marcadores de cidade"
+                subLabel="Pontos com tamanho proporcional"
+                checked={visual.mostrarSimbolos}
+                onChange={v => onUpdate("mostrarSimbolos", v)}
+              />
+            </>
+          )}
 
           {/* ── Bordas ── */}
           <Secao titulo="Bordas" />
@@ -308,17 +332,6 @@ export function PainelVisual({
           <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
             <BotaoIcone title="Captura" icon="📷" onClick={onScreenshot} />
             <BotaoIcone title="Tela cheia" icon="⛶" onClick={onFullscreen} />
-          </div>
-
-          {/* ── Exportar Report ── */}
-          <Secao titulo="Exportar Carta" />
-          <div style={{ fontSize: 10, color: "#4a5568", marginBottom: 6, lineHeight: 1.4 }}>
-            Carta tematica ABNT com legenda, escala e metadados
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <BotaoIcone title="PNG" icon="🖼️" onClick={() => onReport?.("png")} />
-            <BotaoIcone title="PDF" icon="📄" onClick={() => onReport?.("pdf")} />
-            <BotaoIcone title="Instagram 4:5" icon="📱" onClick={() => onReport?.("instagram")} />
           </div>
 
           {/* ── Navegação ── */}

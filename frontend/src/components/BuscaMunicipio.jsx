@@ -24,7 +24,7 @@ export function BuscaMunicipio({ onFlyTo }) {
 
   // Carrega lista de municípios uma vez
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
+    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:80";
     fetch(`${apiUrl}/api/municipios`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setMunicipios(data))

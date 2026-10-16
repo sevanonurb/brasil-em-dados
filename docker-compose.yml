@@ -7,12 +7,12 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-brasil_dados}
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
     volumes:
       - postgis_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     command: >
       postgres
         -c shared_buffers=2GB
@@ -41,15 +41,20 @@ services:
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-brasil_dados}
       DB_USER: ${POSTGRES_USER:-brasil}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 500
       DEFAULT_POOL_SIZE: 25
     ports:
-      - "6432:6432"
+      - "127.0.0.1:6432:6432"
     depends_on:
       postgis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-brasil}"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ─── Servidor de Vector Tiles (Rust) ──────────────────────────────────────
   martin:
@@ -57,7 +62,7 @@ services:
     container_name: brasil_martin
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-brasil}:${POSTGRES_PASSWORD:-brasil_secret}@postgis:5432/${POSTGRES_DB:-brasil_dados}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-brasil}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@postgis:5432/${POSTGRES_DB:-brasil_dados}
       RUST_LOG: martin=info,actix_web=warn
     volumes:
       - ./tileserver/martin_config.yaml:/config.yaml:ro
@@ -84,7 +89,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-brasil_dados}
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POSTGRES_HOST: postgis
       PORT: 8001
     volumes:
@@ -92,6 +97,11 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ─── Proxy / cache HTTP para tiles ────────────────────────────────────────
   nginx:
@@ -104,8 +114,15 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - martin
-      - api
+      martin:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ─── Orquestrador de pipeline ELT ─────────────────────────────────────────
   dagster_webserver:
@@ -118,7 +135,7 @@ services:
       DAGSTER_HOME: /opt/dagster/dagster_home
       POSTGRES_DB: ${POSTGRES_DB:-brasil_dados}
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POSTGRES_HOST: postgis
     volumes:
       - ./pipeline:/opt/dagster/app
@@ -140,7 +157,7 @@ services:
       DAGSTER_HOME: /opt/dagster/dagster_home
       POSTGRES_DB: ${POSTGRES_DB:-brasil_dados}
       POSTGRES_USER: ${POSTGRES_USER:-brasil}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brasil_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POSTGRES_HOST: postgis
     volumes:
       - ./pipeline:/opt/dagster/app

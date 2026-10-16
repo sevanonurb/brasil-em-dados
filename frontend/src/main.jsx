@@ -22,10 +22,11 @@ import {
 } from "./layers/semantic_zoom.js";
 import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { METRICA_LABEL_CURTO, formatarParaTooltip } from "./utils/metricas.js";
-import { gerarReport } from "./utils/report.js";
+import { gerarReport, gerarPreviewCarta } from "./utils/report.js";
 import { PainelControles } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { PainelVisual } from "./components/PainelVisual.jsx";
+import { PainelExportar } from "./components/PainelExportar.jsx";
 import { Legenda } from "./components/Legenda.jsx";
 import { BuscaMunicipio } from "./components/BuscaMunicipio.jsx";
 
@@ -60,6 +61,11 @@ const BASEMAP_STYLE = {
       tiles: [`${import.meta.env.VITE_MARTIN_URL}/tiles_labels_municipios/{z}/{x}/{y}`],
       maxzoom: 14,
     },
+    "martin-labels-uf": {
+      type: "vector",
+      tiles: [`${import.meta.env.VITE_MARTIN_URL}/tiles_labels_ufs/{z}/{x}/{y}`],
+      maxzoom: 8,
+    },
   },
   glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
   layers: [
@@ -91,15 +97,74 @@ const BASEMAP_STYLE = {
       paint: { "line-color": "#505870", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 10, 1.5, 14, 3], "line-opacity": 0.8 },
       filter: ["in", "class", "motorway", "trunk", "primary"],
     },
+    // ── Labels de UFs (zooms baixos — nível nacional) ──
+    { id: "uf-labels", type: "symbol", source: "martin-labels-uf", "source-layer": "labels_ufs",
+      minzoom: 0, maxzoom: 7,
+      layout: {
+        visibility: "none",
+        "text-field": "{sigla}",
+        "text-size": ["interpolate", ["linear"], ["zoom"], 2, 12, 4, 16, 6, 14],
+        "text-font": ["Open Sans Bold"],
+        "text-letter-spacing": 0.15,
+        "text-anchor": "center",
+        "text-max-width": 6,
+        "text-padding": 2,
+        "symbol-sort-key": ["get", "prioridade"],
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": "#e2e8f0",
+        "text-halo-color": "rgba(0,0,0,0.7)",
+        "text-halo-width": 2,
+        "text-opacity": ["interpolate", ["linear"], ["zoom"], 5, 1, 7, 0],
+      },
+    },
     // ── Labels de municípios brasileiros (Martin — somente Brasil) ──
     { id: "place-labels", type: "symbol", source: "martin-labels", "source-layer": "labels_municipios",
       layout: {
         visibility: "none",
-        "text-field": "{nome}", "text-size": ["interpolate", ["linear"], ["zoom"], 3, 10, 8, 13, 12, 16],
+        "text-field": "{nome}",
+        "text-size": [
+          "interpolate", ["linear"], ["zoom"],
+          3, ["case", [">=", ["get", "populacao"], 1000000], 14, [">=", ["get", "populacao"], 500000], 12, 10],
+          6, ["case", [">=", ["get", "populacao"], 1000000], 16, [">=", ["get", "populacao"], 200000], 14, [">=", ["get", "populacao"], 50000], 12, 11],
+          10, ["case", [">=", ["get", "populacao"], 500000], 18, [">=", ["get", "populacao"], 100000], 15, 13],
+          14, 14,
+        ],
         "text-font": ["Open Sans Bold"],
-        "text-anchor": "center", "text-max-width": 8,
+        "text-transform": ["case", ["get", "capital"], "uppercase", "none"],
+        "text-anchor": "center",
+        "text-max-width": 8,
+        "text-padding": 3,
+        "symbol-sort-key": ["get", "prioridade"],
+        "text-allow-overlap": false,
+        "text-optional": false,
       },
-      paint: { "text-color": "#c0c8d8", "text-halo-color": "#0d0f16", "text-halo-width": 1.5 },
+      paint: {
+        "text-color": [
+          "case", ["get", "capital"], "#ffffff", "#c0c8d8",
+        ],
+        "text-halo-color": "#0d0f16",
+        "text-halo-width": [
+          "case", [">=", ["get", "populacao"], 500000], 2, 1.5,
+        ],
+      },
+    },
+    // ── Símbolos (pontos) de cidades ──
+    { id: "place-dots", type: "circle", source: "martin-labels", "source-layer": "labels_municipios",
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": [
+          "interpolate", ["linear"], ["zoom"],
+          3, ["case", ["get", "capital"], 5, [">=", ["get", "populacao"], 1000000], 4, [">=", ["get", "populacao"], 500000], 3, 2],
+          7, ["case", ["get", "capital"], 6, [">=", ["get", "populacao"], 1000000], 5, [">=", ["get", "populacao"], 200000], 4, 3],
+          12, ["case", ["get", "capital"], 5, [">=", ["get", "populacao"], 500000], 4, 3],
+        ],
+        "circle-color": ["case", ["get", "capital"], "#ffffff", "#c0c8d8"],
+        "circle-stroke-color": "#0d0f16",
+        "circle-stroke-width": ["case", ["get", "capital"], 2, 1],
+        "circle-opacity": 0.9,
+      },
     },
     { id: "road-labels", type: "symbol", source: "carto", "source-layer": "transportation_name",
       layout: {
@@ -157,6 +222,26 @@ const METRICAS_RANGES = {
     NACIONAL: { min: 0, max: 400 },
     ESTADUAL: { min: 0, max: 400 },
     MUNICIPAL: { min: 0, max: 20000 },
+  },
+  densidade_domiciliar: {
+    NACIONAL: { min: 0, max: 150 },
+    ESTADUAL: { min: 0, max: 150 },
+    MUNICIPAL: { min: 0, max: 7000 },
+  },
+  populacao_absoluta: {
+    NACIONAL:  { min: 0, max: 45000000 },
+    ESTADUAL:  { min: 0, max: 500000 },
+    MUNICIPAL: { min: 0, max: 2000 },
+  },
+  domicilios_absoluto: {
+    NACIONAL:  { min: 0, max: 16000000 },
+    ESTADUAL:  { min: 0, max: 200000 },
+    MUNICIPAL: { min: 0, max: 800 },
+  },
+  area_territorial: {
+    NACIONAL:  { min: 0, max: 1600000 },
+    ESTADUAL:  { min: 0, max: 50000 },
+    MUNICIPAL: { min: 0, max: 200 },
   },
   // Saneamento — Censo 2022 — percentual de domicílios (0–100%)
   acesso_agua: {
@@ -745,7 +830,7 @@ const METRICAS_INVERTIDAS = new Set([
 function useAnosDisponiveis() {
   const setAnosDisponiveis = useFiltrosStore(s => s.setAnosDisponiveis);
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
+    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:80";
     fetch(`${apiUrl}/api/anos`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -914,7 +999,10 @@ export default function App() {
     opacidadeRuas: 0.5,           // opacidade da camada de ruas
     mostrarSatelite: false,       // imagem de satélite por baixo
     opacidadeSatelite: 0.4,       // opacidade do satélite
+    mostrarNomesUF: false,        // siglas dos estados
     mostrarNomes: false,          // rótulos de cidades
+    tamanhoNomes: 1.0,            // fator de escala dos rótulos (0.5–2.0)
+    mostrarSimbolos: false,       // pontos marcadores de cidades
     mostrarCoordenadas: false,    // lat/lon ao mover o mouse
   });
   const updateVisual = useCallback((key, val) => {
@@ -947,12 +1035,114 @@ export default function App() {
     } catch (_) { /* canvas tainted — CORS */ }
   }, []);
 
-  const onReport = useCallback((formato) => {
+  // ── Presets de basemap para exportacao ──────────────────────────────────────
+  const BASEMAP_PRESETS = {
+    escuro: {
+      background: "#0d0f16",
+      water: "#14171f",
+      landcover: "#181c28",
+      labelColor: "#c0c8d8",
+      labelHalo: "#0d0f16",
+      roadColor: "#3a4050",
+      roadMajorColor: "#505870",
+      satelite: false,
+    },
+    claro: {
+      background: "#e8e6df",
+      water: "#b8d4e8",
+      landcover: "#d6dbc8",
+      labelColor: "#3a3a3a",
+      labelHalo: "#f2f1ec",
+      roadColor: "#b0a898",
+      roadMajorColor: "#8a8070",
+      satelite: false,
+    },
+    satelite: {
+      background: "#0a0c14",
+      water: "#0a1020",
+      landcover: "#101418",
+      labelColor: "#ffffff",
+      labelHalo: "rgba(0,0,0,0.7)",
+      roadColor: "#556070",
+      roadMajorColor: "#708090",
+      satelite: true,
+    },
+  };
+
+  const onReport = useCallback(async (formato, opcoes = {}) => {
     const map = mapRef.current;
     if (!map) return;
+
+    const estilo = opcoes.estiloMapa ?? "escuro";
+    const preset = BASEMAP_PRESETS[estilo];
+
+    // ── Salvar estado atual do basemap ──
+    const saved = {
+      background: map.getPaintProperty("background", "background-color"),
+      waterColor: map.getPaintProperty("water", "fill-color"),
+      waterOp: map.getPaintProperty("water", "fill-opacity"),
+      landColor: map.getPaintProperty("landcover", "fill-color"),
+      landOp: map.getPaintProperty("landcover", "fill-opacity"),
+      labelColor: map.getPaintProperty("place-labels", "text-color"),
+      labelHalo: map.getPaintProperty("place-labels", "text-halo-color"),
+      labelHaloW: map.getPaintProperty("place-labels", "text-halo-width"),
+      roadLabelColor: map.getPaintProperty("road-labels", "text-color"),
+      roadLabelHalo: map.getPaintProperty("road-labels", "text-halo-color"),
+      roadColor: map.getPaintProperty("roads", "line-color"),
+      roadOp: map.getPaintProperty("roads", "line-opacity"),
+      roadMajorColor: map.getPaintProperty("roads-major", "line-color"),
+      roadMajorOp: map.getPaintProperty("roads-major", "line-opacity"),
+      sateliteVis: map.getLayoutProperty("satelite", "visibility"),
+      sateliteOp: map.getPaintProperty("satelite", "raster-opacity"),
+      ufLabelsVis: map.getLayoutProperty("uf-labels", "visibility"),
+      labelsVis: map.getLayoutProperty("place-labels", "visibility"),
+      dotsVis: map.getLayoutProperty("place-dots", "visibility"),
+      roadsVis: map.getLayoutProperty("roads", "visibility"),
+      roadsMajorVis: map.getLayoutProperty("roads-major", "visibility"),
+    };
+
+    // ── Aplicar preset de exportacao ──
+    if (preset) {
+      map.setPaintProperty("background", "background-color", preset.background);
+      map.setPaintProperty("water", "fill-color", preset.water);
+      map.setPaintProperty("water", "fill-opacity", 1);
+      map.setPaintProperty("landcover", "fill-color", preset.landcover);
+      map.setPaintProperty("landcover", "fill-opacity", 0.6);
+      map.setPaintProperty("uf-labels", "text-color", preset.labelColor);
+      map.setPaintProperty("uf-labels", "text-halo-color", preset.labelHalo);
+      map.setPaintProperty("place-labels", "text-color", preset.labelColor);
+      map.setPaintProperty("place-labels", "text-halo-color", preset.labelHalo);
+      map.setPaintProperty("place-labels", "text-halo-width", 2);
+      map.setPaintProperty("road-labels", "text-color", preset.labelColor);
+      map.setPaintProperty("road-labels", "text-halo-color", preset.labelHalo);
+      map.setPaintProperty("roads", "line-color", preset.roadColor);
+      map.setPaintProperty("roads", "line-opacity", 0.6);
+      map.setPaintProperty("roads-major", "line-color", preset.roadMajorColor);
+      map.setPaintProperty("roads-major", "line-opacity", 0.7);
+      // Satelite: ligar/desligar
+      map.setLayoutProperty("satelite", "visibility", preset.satelite ? "visible" : "none");
+      if (preset.satelite) map.setPaintProperty("satelite", "raster-opacity", 0.85);
+    }
+
+    // ── Aguardar o render completo ──
+    // Precisa de tempo suficiente para MapLibre aplicar paint changes e re-renderizar
+    map.triggerRepaint();
+    // Esperar 3 frames garantidos + timeout para tiles carregarem
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await new Promise(r => setTimeout(r, 300));
+    // Se ainda nao esta idle, esperar o idle event
+    if (!map.areTilesLoaded()) {
+      await new Promise(resolve => map.once("idle", resolve));
+    }
+    // Mais 2 frames para o canvas estar atualizado
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    // ── Capturar e gerar ──
     const nivelAtualCalc = nivelForcado ?? getNivelSemantico(viewState.zoom);
     const displayRange = normBounds ?? estatisticas;
     const bounds = map.getBounds();
+    // Mapear estiloMapa para tema da carta
+    const tema = estilo === "claro" ? "claro" : "escuro";
     gerarReport({
       mapCanvas: map.getCanvas(),
       viewState,
@@ -980,7 +1170,36 @@ export default function App() {
       },
       cid10Labels: CID10_LABELS,
       formato,
+      ...opcoes,
+      tema,
     });
+
+    // ── Restaurar estado original ──
+    if (preset) {
+      map.setPaintProperty("background", "background-color", saved.background);
+      map.setPaintProperty("water", "fill-color", saved.waterColor);
+      map.setPaintProperty("water", "fill-opacity", saved.waterOp);
+      map.setPaintProperty("landcover", "fill-color", saved.landColor);
+      map.setPaintProperty("landcover", "fill-opacity", saved.landOp);
+      map.setPaintProperty("uf-labels", "text-color", "#e2e8f0");
+      map.setPaintProperty("uf-labels", "text-halo-color", "rgba(0,0,0,0.7)");
+      map.setPaintProperty("place-labels", "text-color", saved.labelColor);
+      map.setPaintProperty("place-labels", "text-halo-color", saved.labelHalo);
+      map.setPaintProperty("place-labels", "text-halo-width", saved.labelHaloW ?? 1.5);
+      map.setPaintProperty("road-labels", "text-color", saved.roadLabelColor);
+      map.setPaintProperty("road-labels", "text-halo-color", saved.roadLabelHalo);
+      map.setPaintProperty("roads", "line-color", saved.roadColor);
+      map.setPaintProperty("roads", "line-opacity", saved.roadOp ?? 0.7);
+      map.setPaintProperty("roads-major", "line-color", saved.roadMajorColor);
+      map.setPaintProperty("roads-major", "line-opacity", saved.roadMajorOp ?? 0.8);
+      map.setLayoutProperty("satelite", "visibility", saved.sateliteVis ?? "none");
+      map.setPaintProperty("satelite", "raster-opacity", saved.sateliteOp ?? 0.4);
+      map.setLayoutProperty("uf-labels", "visibility", saved.ufLabelsVis ?? "none");
+      map.setLayoutProperty("place-labels", "visibility", saved.labelsVis ?? "none");
+      map.setLayoutProperty("place-dots", "visibility", saved.dotsVis ?? "none");
+      map.setLayoutProperty("roads", "visibility", saved.roadsVis ?? "none");
+      map.setLayoutProperty("roads-major", "visibility", saved.roadsMajorVis ?? "none");
+    }
   }, [viewState, nivelForcado, filtros, normBounds, estatisticas, featureSelecionada]);
 
   const onFullscreen = useCallback(() => {
@@ -991,6 +1210,35 @@ export default function App() {
     }
   }, []);
   const nivelAtual = nivelForcado ?? getNivelSemantico(viewState.zoom);
+
+  // ── Opts base para preview da carta (sem basemap switch) ──
+  const getCartaBaseOpts = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return null;
+    const b = map.getBounds();
+    return {
+      mapCanvas: map.getCanvas(),
+      viewState,
+      bounds: { north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() },
+      metrica: filtros.metrica,
+      ano: filtros.ano,
+      nivel: nivelAtual,
+      nivelMeta: NIVEL_METADATA[nivelAtual],
+      invertida: METRICAS_INVERTIDAS.has(filtros.metrica),
+      range: normBounds ?? estatisticas,
+      adaptativo: normBounds !== null,
+      featureSelecionada,
+      filtros: {
+        cod_uf: filtros.cod_uf,
+        cid10_capitulo: filtros.cid10_capitulo,
+        sexo: filtros.sexo,
+        cor_raca: filtros.cor_raca,
+        faixa_etaria_min: filtros.faixa_etaria_min,
+        faixa_etaria_max: filtros.faixa_etaria_max,
+      },
+      cid10Labels: CID10_LABELS,
+    };
+  }, [viewState, nivelAtual, filtros, normBounds, estatisticas, featureSelecionada]);
 
   const serverParams = filtros.getServerParams();
   const tileUrlKey = JSON.stringify(serverParams);
@@ -1124,10 +1372,24 @@ export default function App() {
         map.setPaintProperty("roads", "line-opacity", visual.opacidadeRuas ?? 0.7);
         map.setPaintProperty("roads-major", "line-opacity", visual.opacidadeRuas ?? 0.8);
       }
-      // Nomes de cidades e ruas
+      // Nomes de estados (independente)
+      map.setLayoutProperty("uf-labels", "visibility", visual.mostrarNomesUF ? "visible" : "none");
+      // Nomes de cidades, símbolos e ruas
       const labelsVis = visual.mostrarNomes ? "visible" : "none";
       map.setLayoutProperty("place-labels", "visibility", labelsVis);
+      map.setLayoutProperty("place-dots", "visibility", visual.mostrarNomes && visual.mostrarSimbolos ? "visible" : "none");
       map.setLayoutProperty("road-labels", "visibility", visual.mostrarRuas && visual.mostrarNomes ? "visible" : "none");
+      // Escala de tamanho dos rótulos
+      if (visual.mostrarNomes) {
+        const f = visual.tamanhoNomes ?? 1.0;
+        map.setLayoutProperty("place-labels", "text-size", [
+          "interpolate", ["linear"], ["zoom"],
+          3, ["case", [">=", ["get", "populacao"], 1000000], 14*f, [">=", ["get", "populacao"], 500000], 12*f, 10*f],
+          6, ["case", [">=", ["get", "populacao"], 1000000], 16*f, [">=", ["get", "populacao"], 200000], 14*f, [">=", ["get", "populacao"], 50000], 12*f, 11*f],
+          10, ["case", [">=", ["get", "populacao"], 500000], 18*f, [">=", ["get", "populacao"], 100000], 15*f, 13*f],
+          14, 14*f,
+        ]);
+      }
       // Satélite
       map.setLayoutProperty("satelite", "visibility", visual.mostrarSatelite ? "visible" : "none");
       if (visual.mostrarSatelite) {
@@ -1140,7 +1402,7 @@ export default function App() {
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [visual.mostrarRuas, visual.opacidadeRuas, visual.mostrarNomes, visual.mostrarSatelite, visual.opacidadeSatelite, visual.opacidadeBasemap]);
+  }, [visual.mostrarRuas, visual.opacidadeRuas, visual.mostrarNomesUF, visual.mostrarNomes, visual.tamanhoNomes, visual.mostrarSimbolos, visual.mostrarSatelite, visual.opacidadeSatelite, visual.opacidadeBasemap]);
 
   // ── Deck.gl de comparação (lado direito do split) ────────────────────────────
   const compareCanvasRef = useCallback((el) => {
@@ -1506,9 +1768,15 @@ export default function App() {
         comparacao={comparacao}
         onComparacaoUpdate={onComparacaoUpdate}
         onScreenshot={onScreenshot}
-        onReport={onReport}
         onFullscreen={onFullscreen}
         anosDisponiveis={filtros.anosDisponiveis}
+      />
+
+      {/* Painel de exportacao dedicado */}
+      <PainelExportar
+        onReport={onReport}
+        getCartaBaseOpts={getCartaBaseOpts}
+        gerarPreview={gerarPreviewCarta}
       />
 
       {/* Painel de controles */}

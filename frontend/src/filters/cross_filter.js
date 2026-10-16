@@ -21,6 +21,10 @@ export const ANOS_POR_METRICA_DEFAULT = {
   despesa_saude_per_capita:    [2022],
   despesa_educacao_per_capita: [2022],
   densidade_pop:               [2022],
+  densidade_domiciliar:        [2022],
+  populacao_absoluta:          [2022],
+  domicilios_absoluto:         [2022],
+  area_territorial:            [2022],
   // Saneamento — Censo 2022 (estático)
   acesso_agua:                 [2022],
   acesso_esgoto:               [2022],
