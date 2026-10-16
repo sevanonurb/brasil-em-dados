@@ -64,7 +64,7 @@ docker exec brasil_postgis psql -U brasil -d brasil_dados -c "
   REFRESH MATERIALIZED VIEW CONCURRENTLY api.indicadores_uf;"
 ```
 
-More commands in `CLAUDE.md`.
+More commands in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 

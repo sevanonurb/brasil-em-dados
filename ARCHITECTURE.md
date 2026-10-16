@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Architecture
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Technical reference for this repository: what each service does, how the data model is shaped, and the decisions behind the rendering and ingestion pipelines.
 
 ## What this is
 
