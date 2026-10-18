@@ -1,6 +1,6 @@
 # brasil_em_dados — continental-scale geospatial panel for Brazilian public data
 
-An interactive panel that serves **95 public indicators** for Brazil — from state level down
+An interactive panel that serves **94 public indicators** for Brazil — from state level down
 to **census tract** — as vector tiles generated directly from PostGIS.
 
 ![The panel at municipal level: general mortality per 100k inhabitants across all 5,570 Brazilian municipalities, 2023](docs/panel-municipal.png)
@@ -20,7 +20,7 @@ country, at the finest public resolution available, without waiting for a page t
 
 - **Four geographic levels**: states (`geo.ufs`), municipalities (`geo.municipios`),
   census tracts (`geo.setores_censitarios`) and subdivided tracts.
-- **95 indicators** across health, education, demography, housing, economy, public finance
+- **94 indicators** across health, education, demography, housing, economy, public finance
   and vehicle fleet — see `frontend/src/utils/metricas.js`.
 - **Cross-filtering** between map, legend and detail panel.
 - **Export** of the current view.
