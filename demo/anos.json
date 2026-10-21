@@ -1,0 +1,492 @@
+{
+"taxa_mortalidade": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"taxa_homicidio": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"pib_per_capita": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"receita_per_capita": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"despesa_saude_per_capita": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"despesa_educacao_per_capita": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"densidade_pop": [
+2022
+],
+"densidade_domiciliar": [
+2022
+],
+"populacao_absoluta": [
+2022
+],
+"domicilios_absoluto": [
+2022
+],
+"area_territorial": [
+2022
+],
+"acesso_agua": [
+2022
+],
+"acesso_esgoto": [
+2022
+],
+"coleta_lixo": [
+2022
+],
+"taxa_natalidade": [
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"leitos_sus_por_1k": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"medicos_por_10k": [
+2023,
+2022,
+2021,
+2020,
+2019,
+2018,
+2017,
+2016,
+2015
+],
+"ideb_anos_iniciais": [
+2021,
+2019
+],
+"ideb_anos_finais": [
+2021,
+2019
+],
+"taxa_envelhecimento": [
+2022
+],
+"razao_sexo": [
+2022
+],
+"taxa_alfabetizacao": [
+2022
+],
+"domicilios_internet": [
+2022
+],
+"media_moradores": [
+2022
+],
+"pop_favelas_pct": [
+2022
+],
+"renda_domiciliar_per_capita": [
+2022
+],
+"renda_domiciliar_mediana_pc": [
+2022
+],
+"renda_media_trabalho": [
+2022
+],
+"renda_mediana_trabalho": [
+2022
+],
+"mortalidade_infantil": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_ocupacao": [
+2022
+],
+"media_anos_estudo": [
+2022
+],
+"pct_superior_completo": [
+2022
+],
+"taxa_deficiencia": [
+2022
+],
+"idade_mediana": [
+2022
+],
+"pct_pib_agropecuaria": [
+2021,
+2020,
+2019,
+2018
+],
+"pct_pib_industria": [
+2021,
+2020,
+2019,
+2018
+],
+"pct_pib_servicos": [
+2021,
+2020,
+2019,
+2018
+],
+"vbp_agricola_per_capita": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"vbp_pecuaria_per_capita": [
+2023,
+2022,
+2021,
+2020
+],
+"divida_rcl": [
+2022,
+2021,
+2020,
+2019
+],
+"despesa_pessoal_rcl": [
+2022,
+2021,
+2020,
+2019
+],
+"pct_indigena": [
+2022
+],
+"pct_quilombola": [
+2022
+],
+"pct_agrofamiliar": [
+2017
+],
+"pct_mecanizado": [
+2017
+],
+"pct_financiamento": [
+2017
+],
+"empresas_por_1k": [
+2023,
+2022
+],
+"taxa_migracao": [
+2022
+],
+"taxa_escolarizacao_1517": [
+2022
+],
+"taxa_desemprego": [
+2022
+],
+"taxa_pendular": [
+2022
+],
+"taxa_informalidade": [
+2022
+],
+"pct_baixa_renda": [
+2022
+],
+"pct_renda_trabalho": [
+2022
+],
+"pct_chefia_feminina": [
+2022
+],
+"domicilios_maquina_lavar": [
+2022
+],
+"superlotacao_domiciliar": [
+2022
+],
+"domicilios_alugados": [
+2022
+],
+"domicilios_monoparentais": [
+2022
+],
+"media_filhos_mulher": [
+2022
+],
+"pct_urbano": [
+2022
+],
+"pct_alvenaria": [
+2022
+],
+"pct_banheiro_exclusivo": [
+2022
+],
+"taxa_nupcialidade": [
+2023
+],
+"taxa_divorcialidade": [
+2023
+],
+"rebanho_bovino_por_km2": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_bovino_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_equino_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_suino_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_ovino_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_caprino_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"rebanho_galinaceos_por_hab": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"incidencia_dengue": [
+2023,
+2021,
+2020,
+2019
+],
+"incidencia_tuberculose": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"incidencia_hanseniase": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"incidencia_leishmaniose": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_internacao_sus": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_internacao_cardiovascular": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_internacao_respiratoria": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_internacao_mental": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"media_permanencia_sus": [
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_aprovacao_ef": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_reprovacao_ef": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_abandono_ef": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_aprovacao_em": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"taxa_abandono_em": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"distorcao_idade_serie_ef": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"distorcao_idade_serie_em": [
+2024,
+2023,
+2022,
+2021,
+2020,
+2019
+],
+"frota_automovel_por_1k": [
+2022,
+2021,
+2020
+],
+"frota_moto_por_1k": [
+2022,
+2021,
+2020
+],
+"frota_caminhao_por_1k": [
+2022,
+2021,
+2020
+],
+"frota_onibus_por_1k": [
+2022,
+2021,
+2020
+],
+"frota_total_por_1k": [
+2022,
+2021,
+2020
+]
+}
