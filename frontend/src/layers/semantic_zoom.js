@@ -1,3 +1,4 @@
+import { DEMO } from "../demo.js";
 /**
  * semantic_zoom.js
  * Define os limites de zoom e a lógica de transição semântica entre os
@@ -19,7 +20,7 @@ export const ZOOM_LEVELS = {
  */
 export function getNivelSemantico(zoom) {
   if (zoom <= ZOOM_LEVELS.NACIONAL.max)       return "NACIONAL";
-  if (zoom <= ZOOM_LEVELS.ESTADUAL.max)       return "ESTADUAL";
+  if (zoom <= ZOOM_LEVELS.ESTADUAL.max || DEMO) return "ESTADUAL";   // a demo estática não tem setores nem CNEFE
   if (zoom <= ZOOM_LEVELS.MUNICIPAL.max)      return "MUNICIPAL";
   return "GEOLOCALIZACAO";
 }

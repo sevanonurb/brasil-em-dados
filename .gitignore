@@ -51,3 +51,10 @@ nginx/cache/
 
 # imagens soltas na raiz
 *.jpg
+
+# static demo: generated artefacts (published on the gh-pages branch, not on main)
+demo/dados/
+demo/web/
+demo/dist/
+demo/anos.json
+demo/extracao.log

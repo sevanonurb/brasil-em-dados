@@ -29,6 +29,7 @@ import { PainelVisual } from "./components/PainelVisual.jsx";
 import { PainelExportar } from "./components/PainelExportar.jsx";
 import { Legenda } from "./components/Legenda.jsx";
 import { BuscaMunicipio } from "./components/BuscaMunicipio.jsx";
+import { DEMO, fontesDeRotulosDemo } from "./demo.js";
 
 // Registra protocolo PMTiles no MapLibre
 const pmtilesProtocol = new Protocol();
@@ -1320,7 +1321,7 @@ export default function App() {
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: BASEMAP_STYLE,
+      style: fontesDeRotulosDemo(BASEMAP_STYLE),
       center: [INITIAL_VIEW.longitude, INITIAL_VIEW.latitude],
       zoom: INITIAL_VIEW.zoom,
       preserveDrawingBuffer: true,
@@ -1688,6 +1689,14 @@ export default function App() {
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      {DEMO && (
+        <div style={{ position: "absolute", left: "50%", bottom: 12, transform: "translateX(-50%)", zIndex: 20,
+                      background: "rgba(13,15,22,0.88)", color: "#cbd5e0", font: "12px/1.4 system-ui, sans-serif",
+                      padding: "6px 12px", borderRadius: 8, maxWidth: "92vw", textAlign: "center", pointerEvents: "none" }}>
+          Static demo · states and municipalities, all 94 indicators and years, default filters ·
+          census tracts, addresses and cause/sex/race/age filters need the full stack
+        </div>
+      )}
       {/* Mapa integrado: MapLibre + deck.gl (interleaved) */}
       <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
 
