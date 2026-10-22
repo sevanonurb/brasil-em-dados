@@ -109,6 +109,17 @@ In demo mode (`VITE_DEMO=1`) `frontend/src/demo.js` answers the panel's own tile
 from these files; the rest of the frontend is unchanged. Rebuild with `demo/build.sh`
 (needs only `docker compose up -d postgis`).
 
+## End-to-end tests
+
+`tests/e2e/testador.py` drives a real Chrome (GPU) through every control of the panel and checks each
+step against an **expected result**, not just "no crash": all 302 indicator-year pairs, the 27 states,
+view levels and filters, boundary values in the search and age slider, map clicks cross-checked against
+the data files, axe-core accessibility, phone and desktop layouts, 300 seeded random actions, and links.
+Visual oracles compare pixels: a control "worked" only if the map visibly changed, and a map where one hue
+covers > 85% of the coloured area is flagged as a scale that does not match the data.
+
+    python3 tests/e2e/testador.py [URL] [step numbers…] [--rapido]   # report: tests/e2e/relatorio/relatorio.html
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
