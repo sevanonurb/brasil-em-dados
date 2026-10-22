@@ -60,7 +60,9 @@ class Sessao:
         self.erros, self.falhas, self.pedidos = [], [], []
         self.pg.on("console", lambda m: m.type == "error" and self.erros.append(f"{m.text[:160]} @ {(m.location or {}).get('url', '')[-60:]}"))
         self.pg.on("pageerror", lambda e: self.erros.append("pageerror: " + str(e)[:200]))
-        self.pg.on("requestfailed", lambda r: self.falhas.append(f"{r.url[-80:]} {r.failure}"))
+        # o mapa cancela tiles fora da vista ao se mover: ERR_ABORTED é rotina, não defeito
+        self.pg.on("requestfailed", lambda r: None if "ERR_ABORTED" in (r.failure or "")
+                   else self.falhas.append(f"{r.url[-80:]} {r.failure}"))
         self.pg.on("response", self._resp)
         self.pg.add_init_script("""
           window.__lcp=0; window.__cls=0;
@@ -257,11 +259,14 @@ def e4_particoes(p):
     ufs = s.pg.locator("select").nth(2).evaluate("e=>[...e.options].map(o=>[o.value,o.text])")
     q_todos = s.quadro(mapa=True)
     for v, t in ufs:
-        z0 = s.zoom(); selecionar(s, 2, v); s.pg.wait_for_timeout(1200)
+        z0 = s.zoom(); selecionar(s, 2, v); s.pg.wait_for_timeout(1500)
+        try: s.pg.wait_for_load_state("networkidle", timeout=10000)
+        except Exception: pass
+        s.pg.wait_for_timeout(500)
         erros, fal = s.limpar(); f = s.fracao_colorida(); d = s.diferenca(q_todos, s.quadro(mapa=True))
         estado = "FALHA" if erros or f <= LIMIAR_COR else ("OK" if (d > 0.01 or not v) else "ACHADO")
         registrar(4, "partição (UF)", f"Estado: {t}", "o mapa destaca/aproxima o estado (tela muda), 0 erros",
-                  f"tela mudou {d:.1%} vs 'todos'; cor={f:.1%}; zoom {z0}→{s.zoom()}", estado, s.foto(f"04-uf-{v or 'todos'}"))
+                  f"tela mudou {d:.1%} vs 'todos'; cor={f:.1%}; zoom {z0}→{s.zoom()}" + (f"; erros {erros[:2]}" if erros else ""), estado, s.foto(f"04-uf-{v or 'todos'}"))
     selecionar(s, 2, ufs[0][0])
     for nivel in ["Auto", "Estadual", "Municipal", "Setores", "Endereços"]:
         botao = s.pg.locator("button").filter(has_text=nivel)

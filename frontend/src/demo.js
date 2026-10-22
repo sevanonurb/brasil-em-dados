@@ -56,8 +56,20 @@ function camadaComValores(layer, tabela, chave, codUf) {
   };
 }
 
-async function tile(tipo, z, x, y, params) {
-  const r = await arquivos[tipo].getZxy(z, x, y);
+// a rede do Pages às vezes corta uma leitura parcial ("Failed to fetch"): uma segunda tentativa
+// resolve; cancelamento (o mapa saiu dali) sobe como AbortError, que o deck.gl ignora em silêncio
+async function lerTile(tipo, z, x, y, sinal) {
+  try {
+    return await arquivos[tipo].getZxy(z, x, y, sinal);
+  } catch (e) {
+    if (sinal?.aborted || e?.name === "AbortError") throw e;
+    await new Promise(ok => setTimeout(ok, 300));
+    return arquivos[tipo].getZxy(z, x, y, sinal);
+  }
+}
+
+async function tile(tipo, z, x, y, params, sinal) {
+  const r = await lerTile(tipo, z, x, y, sinal);
   if (!r?.data) return new Response(null, { status: 204 });
   const vt = new VectorTile(new Pbf(new Uint8Array(r.data)));
   const camada = vt.layers[CAMADA[tipo]];
@@ -80,7 +92,7 @@ if (DEMO) {
     if (m) {
       const [, tipo, z, x, y] = m;
       if (tipo === "setores" || tipo === "cnefe") return new Response(null, { status: 204 });
-      return tile(tipo, +z, +x, +y, url.searchParams);
+      return tile(tipo, +z, +x, +y, url.searchParams, opcoes?.signal ?? (typeof entrada === "string" ? undefined : entrada.signal));
     }
     if (/\/api\/anos\/?$/.test(url.pathname)) return fetchOriginal(BASE + "anos.json", opcoes);
     if (/\/api\/municipios\/?$/.test(url.pathname)) return fetchOriginal(BASE + "municipios.json", opcoes);
