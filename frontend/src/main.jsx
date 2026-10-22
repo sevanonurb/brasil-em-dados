@@ -1587,6 +1587,9 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 80],
+        // objetos, não o formato binário: handleTileLoad lê f.properties para a escala adaptativa,
+        // e com binary (padrão) a escala nunca era calculada e o mapa saturava num tom só
+        binary: false,
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
         getLineColor: getSelectionLineColor(ufLineColor),
@@ -1623,6 +1626,9 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 60],
+        // objetos, não o formato binário: handleTileLoad lê f.properties para a escala adaptativa,
+        // e com binary (padrão) a escala nunca era calculada e o mapa saturava num tom só
+        binary: false,
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
         getLineColor: getSelectionLineColor(munLineColor),
@@ -1647,6 +1653,9 @@ export default function App() {
         pickable: true,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 60],
+        // objetos, não o formato binário: handleTileLoad lê f.properties para a escala adaptativa,
+        // e com binary (padrão) a escala nunca era calculada e o mapa saturava num tom só
+        binary: false,
         onTileLoad: handleTileLoad,
         getFillColor: getChoroplethColor,
         getLineColor: getSelectionLineColor(setorLineColor),
