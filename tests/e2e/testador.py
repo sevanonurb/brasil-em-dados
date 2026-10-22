@@ -245,6 +245,13 @@ def e3_exaustivo(p):
     s.fechar()
 
 
+def ausente(s, etapa, tecnica, caso, foto):
+    """Controle que a página não oferece: aceitável só se ela disser por quê (aviso visível)."""
+    aviso = s.pg.get_by_text(re.compile("só existem no painel completo|need the full stack")).count() > 0
+    registrar(etapa, tecnica, caso, "oferecido, ou ausente com aviso visível",
+              "não oferecido; aviso na tela" if aviso else "não oferecido e sem aviso", "OK" if aviso else "ACHADO", s.foto(foto))
+
+
 def e4_particoes(p):
     s = Sessao(p); s.abrir(); s.limpar()
     ufs = s.pg.locator("select").nth(2).evaluate("e=>[...e.options].map(o=>[o.value,o.text])")
@@ -257,7 +264,9 @@ def e4_particoes(p):
                   f"tela mudou {d:.1%} vs 'todos'; cor={f:.1%}; zoom {z0}→{s.zoom()}", estado, s.foto(f"04-uf-{v or 'todos'}"))
     selecionar(s, 2, ufs[0][0])
     for nivel in ["Auto", "Estadual", "Municipal", "Setores", "Endereços"]:
-        s.limpar(); s.pg.locator("button").filter(has_text=nivel).first.click(); s.pg.wait_for_timeout(3500)
+        botao = s.pg.locator("button").filter(has_text=nivel)
+        if not botao.count(): ausente(s, 4, "partição (nível)", f"nível «{nivel}»", f"04-nivel-{nivel}"); continue
+        s.limpar(); botao.first.click(); s.pg.wait_for_timeout(3500)
         erros, _ = s.limpar(); f = s.fracao_colorida()
         estado = "FALHA" if erros else ("OK" if f > LIMIAR_COR else "ACHADO")
         registrar(4, "partição (nível)", f"nível «{nivel}»", "mapa com conteúdo (ou aviso de indisponível)", f"cor={f:.1%} erros={len(erros)}",
@@ -266,11 +275,15 @@ def e4_particoes(p):
     ref = s.fracao_colorida(); q_ref = s.quadro(mapa=True)
     for grupo in [["Masculino", "Feminino", "Todos"], ["Branca", "Preta", "Parda", "Indígena", "Todas"]]:
         for b in grupo:
-            s.limpar(); s.pg.locator("button").filter(has_text=re.compile(f"^{b}$")).first.click(); s.pg.wait_for_timeout(1500)
+            botao = s.pg.locator("button").filter(has_text=re.compile(f"^{b}$"))
+            if not botao.count(): ausente(s, 4, "partição (filtro)", f"filtro «{b}»", f"04-filtro-{b}"); continue
+            s.limpar(); botao.first.click(); s.pg.wait_for_timeout(1500)
             erros, _ = s.limpar(); f = s.fracao_colorida(); mudou = s.diferenca(q_ref, s.quadro(mapa=True)) > 0.01
             estado = "FALHA" if erros else ("OK" if mudou or b in ("Todos", "Todas") else "ACHADO")
             registrar(4, "partição (filtro)", f"filtro «{b}»", "mapa muda, ou o controle avisa que não vale na demo",
                       f"cor={f:.1%} (ref {ref:.1%}) mudou={'sim' if mudou else 'não'}", estado, s.foto(f"04-filtro-{b}"))
+    if s.pg.locator("select").count() < 4:
+        ausente(s, 4, "partição (causa)", "seletor de causa (CID-10)", "04-causa-ausente"); s.fechar(); return
     causas = s.pg.locator("select").nth(3).evaluate("e=>[...e.options].map(o=>[o.value,o.text])")
     for v, t in causas[1:]:
         s.limpar(); selecionar(s, 3, v)

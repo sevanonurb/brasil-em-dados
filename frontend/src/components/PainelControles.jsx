@@ -8,10 +8,11 @@
 import React, { useState } from "react";
 import { NIVEL_METADATA } from "../layers/semantic_zoom.js";
 import { METRICAS_SAUDE, CID10_LABELS } from "../filters/cross_filter.js";
+import { DEMO } from "../demo.js";
 import "./RangeSlider.css";
 
 // 27 UFs em ordem alfabética de sigla
-const UFS_BRASIL = [
+export const UFS_BRASIL = [
   { cod: 12, sigla: "AC", nome: "Acre" },
   { cod: 27, sigla: "AL", nome: "Alagoas" },
   { cod: 16, sigla: "AP", nome: "Amapá" },
@@ -294,7 +295,8 @@ const SEXO_OPCOES = [
   { value: "F",  label: "Feminino" },
 ];
 
-const NIVEIS = ["NACIONAL", "ESTADUAL", "MUNICIPAL", "GEOLOCALIZACAO"];
+// a demo estática só tem estados e municípios: os outros níveis dariam mapa vazio
+const NIVEIS = DEMO ? ["NACIONAL", "ESTADUAL"] : ["NACIONAL", "ESTADUAL", "MUNICIPAL", "GEOLOCALIZACAO"];
 const NIVEL_LABELS = {
   NACIONAL:       "Estadual",
   ESTADUAL:       "Municipal",
@@ -312,12 +314,14 @@ function DualRangeSlider({ minVal, maxVal, onChange }) {
       <div className="dual-range__active" style={{ left: `${pMin}%`, width: `${pMax - pMin}%` }} />
       <input
         type="range" min={0} max={17} step={1}
+        aria-label="Faixa etária mínima"
         value={minVal}
         data-on-top={minVal >= maxVal ? "true" : undefined}
         onChange={e => onChange([Math.min(Number(e.target.value), maxVal), maxVal])}
       />
       <input
         type="range" min={0} max={17} step={1}
+        aria-label="Faixa etária máxima"
         value={maxVal}
         data-on-top={minVal < maxVal ? "true" : undefined}
         onChange={e => onChange([minVal, Math.max(Number(e.target.value), minVal)])}
@@ -339,16 +343,17 @@ export function PainelControles({
   onEspecieChange,
   onNivelChange,
 }) {
-  const [aberto, setAberto] = useState(true);
+  // no celular começa fechado: aberto, cobre a maior parte do mapa
+  const [aberto, setAberto] = useState(() => window.innerWidth > 640);
 
   const meta = NIVEL_METADATA[nivelAtual];
 
   return (
     <div style={{
       position: "absolute",
-      top: 16,
+      top: window.innerWidth > 640 ? 16 : 64,
       right: 16,
-      width: 280,
+      width: "min(280px, calc(100vw - 32px))",
       background: "rgba(15,17,23,0.92)",
       border: "1px solid #2d3748",
       borderRadius: 12,
@@ -367,6 +372,10 @@ export function PainelControles({
           cursor: "pointer",
         }}
         onClick={() => setAberto(!aberto)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={aberto}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAberto(!aberto); } }}
       >
         <span style={{ fontWeight: 600, fontSize: 14 }}>
           {meta.icone} {meta.label}
@@ -414,6 +423,7 @@ export function PainelControles({
                   <button
                     key={nivel}
                     onClick={() => onNivelChange(nivel)}
+                    aria-pressed={ativo}
                     title={semDados
                       ? `${NIVEL_METADATA[nivel].descricao} — dados não carregados`
                       : NIVEL_METADATA[nivel].descricao}
@@ -461,6 +471,7 @@ export function PainelControles({
               INDICADOR
             </label>
             <select
+              aria-label="Indicador"
               value={filtros.metrica}
               onChange={e => onMetricaChange(e.target.value)}
               style={selectStyle}
@@ -481,6 +492,7 @@ export function PainelControles({
               ANO
             </label>
             <select
+              aria-label="Ano"
               value={filtros.ano}
               onChange={e => filtros.setAno(Number(e.target.value))}
               style={selectStyle}
@@ -497,6 +509,7 @@ export function PainelControles({
               ESTADO (UF)
             </label>
             <select
+              aria-label="Estado (UF)"
               value={filtros.cod_uf ?? ""}
               onChange={e => onUFChange(e.target.value ? Number(e.target.value) : null)}
               style={selectStyle}
@@ -509,12 +522,21 @@ export function PainelControles({
           </div>
 
           {/* Causa de morte (apenas quando métrica de saúde) */}
-          {["taxa_mortalidade"].includes(filtros.metrica) && (
+          {/* a demo foi extraída com os filtros padrão: causa, sexo, raça e idade não existem nela.
+              Mostrá-los trocava a escala sem trocar o valor, e o mapa saía errado com cara de certo. */}
+          {DEMO && METRICAS_SAUDE.includes(filtros.metrica) && (
+            <div style={{ fontSize: 11, color: "#a0aec0", lineHeight: 1.4 }}>
+              Filtros por causa, sexo, cor/raça e idade só existem no painel completo.
+            </div>
+          )}
+
+          {!DEMO && ["taxa_mortalidade"].includes(filtros.metrica) && (
             <div>
               <label style={{ fontSize: 11, color: "#a0aec0", display: "block", marginBottom: 4 }}>
                 CAUSA (CID-10)
               </label>
               <select
+                aria-label="Causa (CID-10)"
                 value={filtros.cid10_capitulo ?? ""}
                 onChange={e => filtros.setCID10(e.target.value || null)}
                 style={selectStyle}
@@ -527,7 +549,7 @@ export function PainelControles({
           )}
 
           {/* Filtros demográficos — para todas as métricas de saúde com microdados */}
-          {METRICAS_SAUDE.includes(filtros.metrica) && (<>
+          {!DEMO && METRICAS_SAUDE.includes(filtros.metrica) && (<>
 
             {/* Sexo */}
             <div>

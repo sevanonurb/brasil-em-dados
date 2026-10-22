@@ -60,6 +60,7 @@ function SliderRow({ label, value, min, max, step, onChange, badge, onBadgeClick
       </div>
       <input
         type="range" min={min} max={max} step={step}
+        aria-label={label}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
         style={{ width: "100%", height: 4, accentColor: "#4299e1", cursor: "pointer" }}

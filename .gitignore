@@ -58,4 +58,4 @@ demo/web/
 demo/dist/
 demo/anos.json
 demo/extracao.log
-tests/e2e/relatorio/
+tests/e2e/relatorio*/

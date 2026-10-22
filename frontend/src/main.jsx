@@ -23,7 +23,7 @@ import {
 import { useFiltrosStore, CID10_LABELS } from "./filters/cross_filter.js";
 import { METRICA_LABEL_CURTO, formatarParaTooltip } from "./utils/metricas.js";
 import { gerarReport, gerarPreviewCarta } from "./utils/report.js";
-import { PainelControles } from "./components/PainelControles.jsx";
+import { PainelControles, UFS_BRASIL } from "./components/PainelControles.jsx";
 import { PainelDetalhes } from "./components/PainelDetalhes.jsx";
 import { PainelVisual } from "./components/PainelVisual.jsx";
 import { PainelExportar } from "./components/PainelExportar.jsx";
@@ -986,6 +986,32 @@ export default function App() {
   const filtros = useFiltrosStore();
   useAnosDisponiveis(); // busca anos disponíveis do banco na inicialização
 
+  // Escolher um estado sem mover o mapa não mudava nada visível na escala nacional:
+  // voa até a caixa dos municípios daquela UF (a mesma lista da busca).
+  const municipiosRef = useRef(null);
+  const escolherUF = useCallback(async (cod) => {
+    filtros.setUF(cod);
+    if (!cod) { setFlyTarget({ ...INITIAL_VIEW, transitionDuration: 1200 }); return; }
+    const sigla = UFS_BRASIL.find(u => u.cod === cod)?.sigla;
+    try {
+      if (!municipiosRef.current) {
+        const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:80";
+        const r = await fetch(`${apiUrl}/api/municipios`);
+        municipiosRef.current = r.ok ? await r.json() : [];
+      }
+      const pts = municipiosRef.current.filter(m => m.uf === sigla);
+      if (!pts.length) return;
+      const lons = pts.map(m => m.lon), lats = pts.map(m => m.lat);
+      const [x0, x1, y0, y1] = [Math.min(...lons), Math.max(...lons), Math.min(...lats), Math.max(...lats)];
+      const vao = Math.max(x1 - x0, (y1 - y0) * 1.2, 0.5);
+      setFlyTarget({
+        longitude: (x0 + x1) / 2, latitude: (y0 + y1) / 2,
+        zoom: Math.min(8, Math.log2(360 / vao) - 0.4),
+        pitch: 0, bearing: 0, transitionDuration: 1200,
+      });
+    } catch { /* sem a lista o filtro continua valendo, só não há voo */ }
+  }, [filtros.setUF]);
+
   // null = automático (segue o zoom); string = nível forçado pelo painel
   const [nivelForcado, setNivelForcado] = useState(null);
 
@@ -1690,9 +1716,10 @@ export default function App() {
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       {DEMO && (
-        <div style={{ position: "absolute", left: "50%", bottom: 12, transform: "translateX(-50%)", zIndex: 20,
-                      background: "rgba(13,15,22,0.88)", color: "#cbd5e0", font: "12px/1.4 system-ui, sans-serif",
-                      padding: "6px 12px", borderRadius: 8, maxWidth: "92vw", textAlign: "center", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 20,
+                      background: "rgba(13,15,22,0.88)", color: "#cbd5e0", font: "11px/1.6 system-ui, sans-serif",
+                      padding: "1px 12px", textAlign: "center", pointerEvents: "none",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           Static demo · states and municipalities, all 94 indicators and years, default filters ·
           census tracts, addresses and cause/sex/race/age filters need the full stack
         </div>
@@ -1795,7 +1822,7 @@ export default function App() {
         zoom={viewState.zoom}
         filtros={filtros}
         onMetricaChange={filtros.setMetrica}
-        onUFChange={filtros.setUF}
+        onUFChange={escolherUF}
         onFaixaEtariaChange={filtros.setFaixaEtaria}
         onCorRacaChange={filtros.setCorRaca}
         onSexoChange={filtros.setSexo}
@@ -1849,7 +1876,8 @@ export default function App() {
         pointerEvents: "none", backdropFilter: "blur(8px)", color: "#e2e8f0",
       }}>
         {NIVEL_METADATA[nivelAtual].icone} {NIVEL_METADATA[nivelAtual].label}
-        {" — "}{NIVEL_METADATA[nivelAtual].descricao}
+        {/* no celular a descrição quebrava em 3 linhas por cima da legenda */}
+        {window.innerWidth > 640 && <>{" — "}{NIVEL_METADATA[nivelAtual].descricao}</>}
       </div>
     </div>
   );

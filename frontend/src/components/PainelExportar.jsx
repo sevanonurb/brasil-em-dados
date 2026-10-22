@@ -378,6 +378,7 @@ export function PainelExportar({ onReport, getCartaBaseOpts, gerarPreview }) {
                 </label>
                 <input
                   type="text"
+                  aria-label="Título"
                   value={tituloCustom}
                   onChange={e => setTituloCustom(e.target.value)}
                   placeholder="Ex: Mortalidade por COVID-19 em SP"
@@ -389,6 +390,7 @@ export function PainelExportar({ onReport, getCartaBaseOpts, gerarPreview }) {
                   Texto explicativo (opcional)
                 </label>
                 <textarea
+                  aria-label="Texto explicativo"
                   value={textoExplicativo}
                   onChange={e => setTextoExplicativo(e.target.value)}
                   placeholder="Substitui a descricao automatica..."

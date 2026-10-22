@@ -26,6 +26,11 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
   const isUF = p.sigla != null || p.regiao != null;
   // Setor censitário: sub-municipal, sem dados econômicos próprios
   const isSetor = !isUF && p.cod_setor != null && p.cod_ibge_7 == null;
+  // seção vazia é ruído: só aparece se houver ao menos um valor econômico no tile
+  const temEconomia = (isUF
+    ? [p.pib_estadual, p.receita_estadual_total, p.transferencias_sus_total]
+    : [p.transferencias_sus, p.despesa_saude, p.despesa_educacao]
+  ).some(v => v != null && isFinite(Number(v)));
   const nome = p.nome_municipio || p.nome || p.sigla || `Setor ${p.cod_setor}`;
   const subtitulo = isUF ? `${p.regiao ?? ""}` : null;
 
@@ -63,6 +68,7 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
           )}
         </div>
         <button
+          aria-label="Fechar detalhes"
           onClick={onClose}
           style={{
             background: "none", border: "none", color: "#718096",
@@ -95,7 +101,7 @@ export function PainelDetalhes({ feature, nivel, filtros, onClose }) {
 
         {/* Economia — só UF e município carregam dados econômicos nos tiles;
             setores censitários são sub-municipais e não os emitem. */}
-        {!isSetor && (
+        {!isSetor && temEconomia && (
           <Secao titulo="Economia">
             {isUF ? (
               <>

@@ -94,6 +94,7 @@ export function BuscaMunicipio({ onFlyTo }) {
           onBlur={() => setTimeout(() => setFocado(false), 150)}
           onKeyDown={handleKeyDown}
           placeholder="Buscar município…"
+          aria-label="Buscar município"
           style={{
             flex: 1,
             background: "transparent",
@@ -106,6 +107,7 @@ export function BuscaMunicipio({ onFlyTo }) {
         />
         {query && (
           <button
+            aria-label="Limpar busca"
             onClick={() => { setQuery(""); setResultados([]); inputRef.current?.focus(); }}
             style={{
               background: "none", border: "none", color: "#4a5568",
