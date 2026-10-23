@@ -881,6 +881,24 @@ function makeTooltip(metrica, cid10) {
   };
 }
 
+// Recorte demográfico ativo, em uma linha, para a legenda: "Suicídio · homens · Parda · 15 a 29 anos"
+// faixas do SIM: 0 = <1 ano, 1 = 1–4, 2 = 5–9, …, 16 = 75–79, 17 = 80+
+const INICIO_FAIXA = [0, 1, ...Array.from({ length: 16 }, (_, i) => 5 * (i + 1))];
+function idades(a, b) {
+  if (b === 0) return "menos de 1 ano";
+  if (b === 17) return `${INICIO_FAIXA[a]} anos ou mais`;
+  return `${INICIO_FAIXA[a]} a ${INICIO_FAIXA[b + 1] - 1} anos`;
+}
+const RACAS = { 1: "Branca", 2: "Preta", 3: "Amarela", 4: "Parda", 5: "Indígena" };
+function descreverRecorte(p) {
+  const partes = [];
+  if (p.metrica === "taxa_mortalidade" && p.cid10_capitulo) partes.push(CID10_LABELS[p.cid10_capitulo] ?? p.cid10_capitulo);
+  if (p.sexo) partes.push(p.sexo === "M" ? "homens" : "mulheres");
+  if (p.cor_raca) partes.push(RACAS[p.cor_raca]);
+  if (p.faixa_etaria_min != null) partes.push(idades(p.faixa_etaria_min, p.faixa_etaria_max));
+  return partes.length ? partes.join(" · ") : null;
+}
+
 const INITIAL_VIEW = {
   longitude: -51.9253,
   latitude: -14.235,
@@ -1850,6 +1868,7 @@ export default function App() {
             semDados={METRICAS_SEM_DADOS.includes(filtros.metrica)}
             invertida={METRICAS_INVERTIDAS.has(filtros.metrica)}
             adaptativo={normBounds !== null}
+            recorte={descreverRecorte(serverParams)}
           />
         );
       })()}

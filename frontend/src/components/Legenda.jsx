@@ -6,7 +6,7 @@
 import React from "react";
 import { METRICA_LABEL_LONGO, METRICAS_SAUDE_SET, formatarParaLegenda } from "../utils/metricas.js";
 
-export function Legenda({ metrica, min, max, semDados = false, invertida = false, adaptativo = false }) {
+export function Legenda({ metrica, min, max, semDados = false, invertida = false, adaptativo = false, recorte = null }) {
   const label = METRICA_LABEL_LONGO[metrica] ?? metrica;
 
   // Rótulo central da legenda
@@ -47,6 +47,8 @@ export function Legenda({ metrica, min, max, semDados = false, invertida = false
         lineHeight: 1.3,
       }}>
         {label}
+        {/* sem o recorte, "Mortalidade geral" aparecia sobre um mapa filtrado por suicídio */}
+        {recorte && <div style={{ color: "#e2e8f0", textTransform: "none", letterSpacing: 0 }}>{recorte}</div>}
       </div>
 
       {semDados ? (
