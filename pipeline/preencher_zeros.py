@@ -5,8 +5,12 @@ Só entram métricas em que o zero foi verificado no CÓDIGO do loader, não sup
   load_sinan.py  incidências: a taxa vinha só dos municípios com notificação (groupby de casos)
   load_sih.py    internações: `if total > 0` / `if n > 0` descartavam o zero explicitamente
 Os loaders já foram corrigidos para gravar o zero; este script conserta o que já está no banco.
+  SIDRA 9884   pop_favelas_pct: o universo da tabela são as FAVELAS ("…segundo as Favelas e
+                Comunidades Urbanas"); município sem favela não existe nela (nem com "-"). Zero por definição.
 NÃO entram: media_permanencia_sus (0/0 é indefinido) e as tabelas do IBGE/SIDRA, onde a ausência
-pode ser "-" (zero) ou "X" (suprimido) e só a fonte distingue.
+pode ser "-" (zero) ou "X" (suprimido) — essas agora saem certas na carga (pipeline/sidra.py).
+Também NÃO entra taxa_divorcialidade: o divórcio é registrado na sede da COMARCA, não onde o casal
+mora; município sem comarca não tem zero divórcios, tem divórcios contados em outro lugar.
 
     python3 pipeline/preencher_zeros.py          (POSTGRES_* no ambiente)
 """
@@ -16,6 +20,7 @@ import psycopg2
 ZERO_POR_CONSTRUCAO = [
     "incidencia_dengue", "incidencia_tuberculose", "incidencia_hanseniase", "incidencia_leishmaniose",
     "taxa_internacao_sus", "taxa_internacao_cardiovascular", "taxa_internacao_respiratoria", "taxa_internacao_mental",
+    "pop_favelas_pct",
 ]
 
 

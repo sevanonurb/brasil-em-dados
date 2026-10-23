@@ -62,3 +62,4 @@ demo/extracao.log
 tests/e2e/relatorio*/
 pipeline/.cache/
 demo/dados-antes/
+demo/dados-antes2/

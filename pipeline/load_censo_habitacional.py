@@ -16,6 +16,8 @@ Resultado: censo.domicilios_municipio (cod_municipio 7 dígitos IBGE)
 import os
 import time
 import requests
+
+import sidra  # "-" do IBGE = zero absoluto (ver sidra.py)
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -38,7 +40,7 @@ def sidra_get(tabela: int, classif: str, periodo: str = "2022") -> dict:
     )
     print(f"  GET {url}")
     for tentativa in range(3):
-        r = requests.get(url, timeout=60)
+        r = sidra.get(url, timeout=60)
         if r.status_code == 200:
             break
         print(f"  HTTP {r.status_code} — aguardando 10s...")

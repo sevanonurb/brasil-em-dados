@@ -49,6 +49,8 @@ import time
 
 import psycopg2
 import requests
+
+import sidra  # "-" do IBGE = zero absoluto (ver sidra.py)
 from psycopg2.extras import execute_values
 
 DB_PARAMS = dict(
@@ -75,7 +77,7 @@ def list_vars(tabela: int, periodo: str = "2022",
         f"{SIDRA_BASE}/{tabela}/periodos/{periodo}/variaveis/allxp"
         f"?localidades=N6[3550308]{classif}"
     )
-    r = requests.get(url, timeout=30)
+    r = sidra.get(url, timeout=30)
     if r.status_code != 200:
         print(f"  AVISO: probe allxp tabela {tabela} → HTTP {r.status_code}")
         return []
@@ -112,7 +114,7 @@ def sidra_fetch(tabela: int, variavel: int | str, classificacao: str = None,
     print(f"  GET T{tabela} V{variavel} {periodo} ...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             print(f"    HTTP {r.status_code}, aguardando 10s...")
@@ -205,7 +207,7 @@ def carregar_idade_mediana(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -238,7 +240,7 @@ def carregar_taxa_ocupacao(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -407,7 +409,7 @@ def carregar_deficiencia(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -451,7 +453,7 @@ def carregar_superior_completo(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -491,7 +493,7 @@ def carregar_renda_domiciliar(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -540,7 +542,7 @@ def carregar_anos_estudo(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -585,7 +587,7 @@ def carregar_renda_trabalho(conn):
     print(f"  GET {url}")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             print(f"    HTTP {r.status_code}, aguardando 10s...")
@@ -651,7 +653,7 @@ def carregar_internet(conn):
         print(f"  GET {url[:100]}...")
         for tentativa in range(3):
             try:
-                r = requests.get(url, timeout=120)
+                r = sidra.get(url, timeout=120)
                 if r.status_code == 200:
                     break
                 time.sleep(10)
@@ -708,7 +710,7 @@ def carregar_indigena(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -748,7 +750,7 @@ def carregar_quilombola(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -791,7 +793,7 @@ def carregar_migracao(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -841,7 +843,7 @@ def carregar_escolarizacao_1517(conn):
     print(f"  GET {url[:100]}...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             time.sleep(10)
@@ -890,7 +892,7 @@ def carregar_agro_mecanizacao_financiamento(conn):
         print(f"  GET T{tabela} V{variavel} ...")
         for t in range(3):
             try:
-                r = requests.get(url, timeout=120)
+                r = sidra.get(url, timeout=120)
                 if r.status_code == 200:
                     break
                 time.sleep(10)
@@ -923,7 +925,7 @@ def carregar_agro_mecanizacao_financiamento(conn):
             url = f"{SIDRA_BASE}/6895/periodos/2017/variaveis/1990?localidades=N6[{cod_str}]"
             for attempt in range(3):
                 try:
-                    r = requests.get(url, timeout=30)
+                    r = sidra.get(url, timeout=30)
                     if r.status_code == 200:
                         break
                     time.sleep(2)
@@ -998,7 +1000,7 @@ def carregar_cempre(conn, anos: list[int]):
         print(f"  GET T9582 V2585 {ano} ...")
         for tentativa in range(3):
             try:
-                r = requests.get(url, timeout=120)
+                r = sidra.get(url, timeout=120)
                 if r.status_code == 200:
                     break
                 time.sleep(10)
@@ -1050,7 +1052,7 @@ def carregar_censo_agropecuario(conn):
         print(f"  GET T6773 V183 C829[{categoria_tipologia}] ...")
         for tentativa in range(3):
             try:
-                r = requests.get(url, timeout=120)
+                r = sidra.get(url, timeout=120)
                 if r.status_code == 200:
                     break
                 time.sleep(10)
@@ -1108,7 +1110,7 @@ def carregar_mortalidade_infantil(conn, anos: list[int]):
         print(f"  GET T2681 V343 (< 1 ano) {ano}...")
         for tentativa in range(3):
             try:
-                r_ob = requests.get(url_obitos, timeout=120)
+                r_ob = sidra.get(url_obitos, timeout=120)
                 if r_ob.status_code == 200:
                     break
                 time.sleep(10)
@@ -1138,7 +1140,7 @@ def carregar_mortalidade_infantil(conn, anos: list[int]):
         print(f"  GET T2612 V218 (nascidos vivos) {ano}...")
         for tentativa in range(3):
             try:
-                r_na = requests.get(url_nasc, timeout=120)
+                r_na = sidra.get(url_nasc, timeout=120)
                 if r_na.status_code == 200:
                     break
                 time.sleep(10)
@@ -1219,7 +1221,7 @@ def carregar_setor_pib(conn, anos: list[int]):
         print(f"  GET T5938 V516,520,6574 {ano} ...")
         for tentativa in range(3):
             try:
-                r = requests.get(url, timeout=120)
+                r = sidra.get(url, timeout=120)
                 if r.status_code == 200:
                     break
                 time.sleep(10)
@@ -1268,7 +1270,7 @@ def carregar_desemprego(conn):
             f"{SIDRA_BASE}/9517/periodos/2022/variaveis/1641"
             f"?localidades=N6[all]&classificacao=629[{cat_id}]|{params_base}"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         result = {}
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1305,7 +1307,7 @@ def carregar_pendular(conn):
         f"{SIDRA_BASE}/10329/periodos/2022/variaveis/1013373"
         f"?localidades=N6[all]&classificacao=469[12188]|2[6794]|386[9680]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1342,7 +1344,7 @@ def carregar_informalidade(conn):
             f"{SIDRA_BASE}/10261/periodos/2022/variaveis/1004090"
             f"?localidades=N6[all]&classificacao=11913[{cat_id}]|{params_base}"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         count = 0
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1377,7 +1379,7 @@ def carregar_baixa_renda(conn):
             f"{SIDRA_BASE}/10296/periodos/2022/variaveis/1013604"
             f"?localidades=N6[all]&classificacao={params_base}|386[{cat_id}]"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         count = 0
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1409,7 +1411,7 @@ def carregar_pct_renda_trabalho(conn):
         f"{SIDRA_BASE}/10297/periodos/2022/variaveis/13504"
         f"?localidades=N6[all]&classificacao=11308[79451]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1439,7 +1441,7 @@ def carregar_media_filhos(conn):
     )
 
     def fetch_var(var):
-        r = requests.get(base.format(var=var), timeout=120)
+        r = sidra.get(base.format(var=var), timeout=120)
         vals = {}
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1475,7 +1477,7 @@ def carregar_monoparental(conn):
         f"{SIDRA_BASE}/9882/periodos/2022/variaveis/1000800"
         f"?localidades=N6[all]&classificacao=1887[72607]|11561[100679]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1502,7 +1504,7 @@ def carregar_domicilios_alugados(conn):
         f"{SIDRA_BASE}/9929/periodos/2022/variaveis/1000381"
         f"?localidades=N6[all]&classificacao=63[1055]|1986[73103]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1530,7 +1532,7 @@ def carregar_chefia_feminina(conn):
         f"{SIDRA_BASE}/9879/periodos/2022/variaveis/1000800"
         f"?localidades=N6[all]&classificacao=460[45902]|68[9902]|11561[100681]|12237[104570]|11562[72593]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1557,7 +1559,7 @@ def carregar_domicilios_maquina(conn):
         f"{SIDRA_BASE}/9935/periodos/2022/variaveis/1000381"
         f"?localidades=N6[all]&classificacao=1977[73092]|63[95826]|125[2932]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1584,7 +1586,7 @@ def carregar_superlotacao(conn):
         f"{SIDRA_BASE}/9933/periodos/2022/variaveis/1000381"
         f"?localidades=N6[all]&classificacao=1975[73090]|63[95826]|125[2932]"
     )
-    r = requests.get(url, timeout=120)
+    r = sidra.get(url, timeout=120)
     rows = []
     for vb in r.json():
         for ri in vb.get("resultados", []):
@@ -1613,7 +1615,7 @@ def carregar_pct_urbano(conn):
             f"{SIDRA_BASE}/9923/periodos/2022/variaveis/93"
             f"?localidades=N6[all]&classificacao=1[{cat_id}]"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         result = {}
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1655,7 +1657,7 @@ def carregar_paredes_alvenaria(conn):
             f"{SIDRA_BASE}/9928/periodos/2022/variaveis/381"
             f"?localidades=N6[all]&classificacao=137[{cat_id}]|{classif_base}"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         result = {}
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1699,7 +1701,7 @@ def carregar_banheiro_exclusivo(conn):
             f"{SIDRA_BASE}/9397/periodos/2022/variaveis/382"
             f"?localidades=N6[all]&classificacao=458[{cat_id}]|{classif_base}"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         result = {}
         for vb in r.json():
             for ri in vb.get("resultados", []):
@@ -1748,7 +1750,7 @@ def carregar_nupcialidade(conn, anos: list[int]):
                 f"{SIDRA_BASE}/4406/periodos/{ano}/variaveis/4993"
                 f"?localidades=N6[in N3[{uf}]]&classificacao={CLASSIF}"
             )
-            r = requests.get(url, timeout=60)
+            r = sidra.get(url, timeout=60)
             if r.status_code != 200:
                 print(f"    UF {uf}: HTTP {r.status_code} — pulando")
                 continue
@@ -1790,7 +1792,7 @@ def carregar_divorcialidade(conn, anos: list[int]):
             f"{SIDRA_BASE}/5929/periodos/{ano}/variaveis/231"
             f"?localidades=N6[all]&classificacao={CLASSIF}"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         if r.status_code != 200:
             print(f"  Ano {ano}: HTTP {r.status_code} — pulando")
             continue
@@ -1832,7 +1834,7 @@ def carregar_separacoes(conn, anos: list[int]):
             f"{SIDRA_BASE}/5922/periodos/{ano}/variaveis/231"
             f"?localidades=N6[all]"
         )
-        r = requests.get(url, timeout=120)
+        r = sidra.get(url, timeout=120)
         if r.status_code != 200:
             print(f"  Ano {ano}: HTTP {r.status_code} — pulando")
             continue
@@ -1872,7 +1874,7 @@ def carregar_obitos_fetais(conn, anos: list[int]):
             f"{SIDRA_BASE}/7328/periodos/{ano}/variaveis/343"
             f"?localidades=N6[all]"
         )
-        r = requests.get(url_obitos, timeout=120)
+        r = sidra.get(url_obitos, timeout=120)
         if r.status_code != 200:
             print(f"  Ano {ano}: HTTP {r.status_code} (T7328) — pulando")
             continue
@@ -1893,7 +1895,7 @@ def carregar_obitos_fetais(conn, anos: list[int]):
             f"{SIDRA_BASE}/2612/periodos/{ano}/variaveis/218"
             f"?localidades=N6[all]"
         )
-        r2 = requests.get(url_nasc, timeout=120)
+        r2 = sidra.get(url_nasc, timeout=120)
         nascidos_map: dict[int, float] = {}
         if r2.status_code == 200:
             for vb in r2.json():
@@ -1981,7 +1983,7 @@ def main():
     parser.add_argument("--skip-raca", action="store_true",
                         help="Pula os indicadores de raça/etnia (indígena, quilombola)")
     parser.add_argument("--skip-agropecuario", action="store_true",
-                        help="Pula o Censo Agropecuário 2017 (% agricultura familiar)")
+                        help="Pula o Censo Agropecuário 2017 (%% agricultura familiar)")
     parser.add_argument("--skip-agro-extra", action="store_true",
                         help="Pula mecanização e financiamento agropecuário (T6870/T6895)")
     parser.add_argument("--skip-migracao", action="store_true",
@@ -1995,27 +1997,27 @@ def main():
     parser.add_argument("--skip-informalidade", action="store_true",
                         help="Pula a taxa de informalidade (T10261)")
     parser.add_argument("--skip-baixa-renda", action="store_true",
-                        help="Pula % baixa renda (T10296)")
+                        help="Pula %% baixa renda (T10296)")
     parser.add_argument("--skip-renda-trabalho", action="store_true",
-                        help="Pula % renda do trabalho (T10297)")
+                        help="Pula %% renda do trabalho (T10297)")
     parser.add_argument("--skip-media-filhos", action="store_true",
                         help="Pula média de filhos por mulher (T10078)")
     parser.add_argument("--skip-monoparental", action="store_true",
-                        help="Pula % domicílios monoparentais (T9882)")
+                        help="Pula %% domicílios monoparentais (T9882)")
     parser.add_argument("--skip-alugados", action="store_true",
-                        help="Pula % domicílios alugados (T9929)")
+                        help="Pula %% domicílios alugados (T9929)")
     parser.add_argument("--skip-chefia-feminina", action="store_true",
-                        help="Pula % chefia feminina (T9879)")
+                        help="Pula %% chefia feminina (T9879)")
     parser.add_argument("--skip-maquina-lavar", action="store_true",
-                        help="Pula % domicílios com máquina de lavar (T9935)")
+                        help="Pula %% domicílios com máquina de lavar (T9935)")
     parser.add_argument("--skip-superlotacao", action="store_true",
-                        help="Pula % superlotação domiciliar (T9933)")
+                        help="Pula %% superlotação domiciliar (T9933)")
     parser.add_argument("--skip-pct-urbano", action="store_true",
-                        help="Pula % população urbana (T9923)")
+                        help="Pula %% população urbana (T9923)")
     parser.add_argument("--skip-alvenaria", action="store_true",
-                        help="Pula % domicílios com paredes de alvenaria (T9928)")
+                        help="Pula %% domicílios com paredes de alvenaria (T9928)")
     parser.add_argument("--skip-banheiro", action="store_true",
-                        help="Pula % moradores com banheiro exclusivo (T9397)")
+                        help="Pula %% moradores com banheiro exclusivo (T9397)")
     parser.add_argument("--skip-nupcialidade", action="store_true",
                         help="Pula taxa de nupcialidade (RC T4406)")
     parser.add_argument("--anos-nupcialidade", nargs="+", type=int,

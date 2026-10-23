@@ -32,6 +32,8 @@ import time
 
 import psycopg2
 import requests
+
+import sidra  # "-" do IBGE = zero absoluto (ver sidra.py)
 from psycopg2.extras import execute_values
 
 DB_PARAMS = dict(
@@ -61,7 +63,7 @@ def sidra_fetch(tabela: int, variavel: int, periodo: int | str,
     print(f"  GET T{tabela} V{variavel} C={classificacao or 'all'} {periodo} ...")
     for tentativa in range(3):
         try:
-            r = requests.get(url, timeout=120)
+            r = sidra.get(url, timeout=120)
             if r.status_code == 200:
                 break
             print(f"    HTTP {r.status_code}, aguardando 10s...")
