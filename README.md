@@ -89,8 +89,8 @@ This is an **independent build**, not a maintained product. What it does not hav
 - **The metadata API is stdlib `http.server`** (`api/server.py`, 438 lines), not FastAPI.
   It works; it has no OpenAPI schema, no request validation and no auth.
 - **The live demo is a subset.** It runs with no server: state and municipal levels, all 94
-  indicators and years, default filters. Census tracts, CNEFE addresses and the cause / sex /
-  race / age filters need the full stack: `docker compose up postgis pgbouncer api martin frontend nginx`
+  indicators and years, and the mortality filters (cause / sex / race / age). Census tracts and
+  CNEFE addresses need the full stack: `docker compose up postgis pgbouncer api martin frontend nginx`
   plus a data load.
 - Coverage and freshness follow the upstream sources, which vary by dataset and by year.
 
@@ -102,12 +102,20 @@ Geometry never changes; values do. So the demo ships the outlines once and the v
 |---|---|
 | `demo/ufs.pmtiles`, `demo/municipios.pmtiles` | outlines + fixed properties, written by GDAL from `geo.*` |
 | `demo/dados/<indicator>/<year>.json` | `{"m": {ibge_code: value}, "u": {state_code: value}}` |
+| `demo/cubo/obitos-<year>.bin.gz` | death counts by municipality × ICD-10 chapter × sex × race × age band (SIM) |
+| `demo/cubo/populacao.bin.gz` | Census 2022 population by municipality × race × sex × age band (SIDRA 9606) |
 
 The values are extracted from **the same `api.tiles_*` functions the live panel uses**, so the demo
 cannot drift from the panel — checked feature by feature on sample tiles (0 differences).
 In demo mode (`VITE_DEMO=1`) `frontend/src/demo.js` answers the panel's own tile and API requests
 from these files; the rest of the frontend is unchanged. Rebuild with `demo/build.sh`
 (needs only `docker compose up -d postgis`).
+
+**Mortality filters.** Every combination of cause × sex × race × age range × year is ~460k
+maps (~15 GB pre-generated). The demo ships the elementary counts instead — 5.2M non-zero cells,
+7.2 MB gzipped — and sums the selected subgroup in the browser with the panel's formula:
+`round(deaths × 100000 / population of the same subgroup, 1)`. `demo/validar_cubo.py` compares
+the browser's result with the database for seeded combinations, every municipality and state.
 
 ## End-to-end tests
 
