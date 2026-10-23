@@ -227,28 +227,23 @@ def main():
                     print(f"  ERRO [{uf}] {ano}: {e}")
 
         # Gera métricas
+        # Todo município com população entra: nenhuma internação de residente é taxa ZERO, não "sem dado".
+        # Só a média de permanência fica de fora sem internação (0/0 é indefinido, não zero).
         rows = []
-        for cod6, dados in agg_ano.items():
+        vazio = {"total": 0, "diarias": 0, "cap_I": 0, "cap_J": 0, "cap_F": 0}
+        for cod6, pop in pop_map.items():
             cod7 = cod7_map.get(cod6)
-            if cod7 is None:
+            if cod7 is None or not pop or pop <= 0:
                 continue
-            pop = pop_map.get(cod6)
-            if not pop or pop <= 0:
-                continue
-
+            dados = agg_ano.get(cod6, vazio)
             total = dados["total"]
+            rows.append((cod7, "taxa_internacao_sus", ano, total / pop * 1000))
             if total > 0:
-                # Taxa total /1k hab
-                rows.append((cod7, "taxa_internacao_sus", ano, total / pop * 1000))
-                # Média de permanência
                 rows.append((cod7, "media_permanencia_sus", ano, dados["diarias"] / total))
-                # Por capítulo CID /100k hab
-                for cap, metrica in [("I", "taxa_internacao_cardiovascular"),
-                                      ("J", "taxa_internacao_respiratoria"),
-                                      ("F", "taxa_internacao_mental")]:
-                    n = dados[f"cap_{cap}"]
-                    if n > 0:
-                        rows.append((cod7, metrica, ano, n / pop * 100_000))
+            for cap, metrica in [("I", "taxa_internacao_cardiovascular"),
+                                  ("J", "taxa_internacao_respiratoria"),
+                                  ("F", "taxa_internacao_mental")]:
+                rows.append((cod7, metrica, ano, dados[f"cap_{cap}"] / pop * 100_000))
 
         print(f"  Ano {ano}: {len(rows)} registros gerados")
 

@@ -60,3 +60,5 @@ demo/dist/
 demo/anos.json
 demo/extracao.log
 tests/e2e/relatorio*/
+pipeline/.cache/
+demo/dados-antes/

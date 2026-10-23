@@ -114,13 +114,31 @@ BEGIN
                 WHEN v_metrica = 'ideb_anos_finais' THEN
                     ideb_uf.ideb_anos_finais_media
                 ELSE (
-                    -- Métricas adicionais: lê de api.metricas_municipio (agregação UF = média)
-                    SELECT AVG(mm.valor)::FLOAT8
+                    -- Métricas adicionais: lê de api.metricas_municipio.
+                    -- Agregação UF = média PONDERADA pelo denominador do indicador. A média simples
+                    -- dava o mesmo peso à capital e ao menor município (e, nas incidências, só entravam
+                    -- os municípios com casos). Σ(taxa·peso)/Σpeso = Σnumerador/Σdenominador quando o
+                    -- peso É o denominador — exato para taxas por habitante, % da população, % de
+                    -- domicílios, por km² e % do PIB; aproximado (peso = população ou receita) para
+                    -- medianas, indicadores escolares, mortalidade infantil e % da RCL.
+                    SELECT (SUM(mm.valor * w.peso) / NULLIF(SUM(w.peso), 0))::FLOAT8
                     FROM api.metricas_municipio mm
                     JOIN geo.municipios gm ON gm.cod_ibge_7 = mm.cod_municipio
+                    LEFT JOIN censo.domicilios_municipio dmp ON dmp.cod_municipio = mm.cod_municipio
+                    LEFT JOIN economia.siconfi_municipios sm ON sm.cod_municipio = mm.cod_municipio AND sm.ano = mm.ano
+                    CROSS JOIN LATERAL (SELECT CASE
+                        WHEN v_metrica IN ('domicilios_alugados', 'domicilios_internet', 'domicilios_maquina_lavar',
+                                           'domicilios_monoparentais', 'superlotacao_domiciliar', 'pct_chefia_feminina',
+                                           'pct_alvenaria', 'media_moradores')    THEN dmp.total_domicilios::FLOAT8
+                        WHEN v_metrica LIKE '%\_por\_km2'                          THEN gm.area_km2::FLOAT8
+                        WHEN v_metrica LIKE 'pct\_pib\_%'                          THEN sm.pib::FLOAT8
+                        WHEN v_metrica IN ('divida_rcl', 'despesa_pessoal_rcl')     THEN sm.receita_total::FLOAT8
+                        ELSE gm.populacao_2022::FLOAT8
+                    END AS peso) w
                     WHERE mm.metrica = v_metrica
                       AND mm.ano = v_ano
                       AND gm.cod_uf = u.cod_uf
+                      AND w.peso > 0
                 )
             END AS valor_metrica,
             ST_AsMVTGeom(

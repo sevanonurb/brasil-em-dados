@@ -1203,18 +1203,20 @@ def carregar_pecuaria(conn, anos: list[int]):
 def carregar_setor_pib(conn, anos: list[int]):
     """
     T5938 — Participação setorial no PIB municipal (%).
-    V516 = agropecuária, V519 = indústria, V6574 = serviços excl. adm pública.
+    V516 = agropecuária, V520 = indústria, V6574 = serviços excl. adm pública — todas "no VAB total do município".
+    (Até 23/10/2026 a indústria lia V519, que é a participação do município na INDÚSTRIA DA UF:
+     Manaus saía com 90% e agropecuária + indústria + serviços passava de 100%.)
     Disponível para 2018-2021 (dado municipal com defasagem ~2 anos).
     """
     print("\n=== T5938: Participação setorial no PIB municipal ===")
-    varmap = {"516": "pct_pib_agropecuaria", "519": "pct_pib_industria", "6574": "pct_pib_servicos"}
+    varmap = {"516": "pct_pib_agropecuaria", "520": "pct_pib_industria", "6574": "pct_pib_servicos"}
 
     for ano in anos:
         url = (
-            f"{SIDRA_BASE}/5938/periodos/{ano}/variaveis/516,519,6574"
+            f"{SIDRA_BASE}/5938/periodos/{ano}/variaveis/516,520,6574"
             f"?localidades=N6[all]"
         )
-        print(f"  GET T5938 V516,519,6574 {ano} ...")
+        print(f"  GET T5938 V516,520,6574 {ano} ...")
         for tentativa in range(3):
             try:
                 r = requests.get(url, timeout=120)

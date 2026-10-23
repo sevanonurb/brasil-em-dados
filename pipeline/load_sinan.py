@@ -135,15 +135,14 @@ def processar_doenca_ano(dis_code: str, ano: int, pop_map: dict[int, float],
     # Agrega contagem por município (6 dígitos)
     contagem = df.groupby(col_mun).size().to_dict()
 
+    # Todo município com população entra: sem notificação no ano é incidência ZERO, não "sem dado".
+    # (Antes só os municípios com casos ganhavam linha; em 2023 a leishmaniose aparecia em 818 de 5.570.)
     rows = []
-    for cod6, n_casos in contagem.items():
+    for cod6, pop in pop_map.items():
         cod7 = cod7_map.get(cod6)
-        if cod7 is None:
+        if cod7 is None or not pop or pop <= 0:
             continue
-        pop = pop_map.get(cod6)
-        if not pop or pop <= 0:
-            continue
-        incidencia = n_casos / pop * 100_000
+        incidencia = contagem.get(cod6, 0) / pop * 100_000
         rows.append((cod7, metrica, ano, incidencia))
 
     print(f"  [{dis_code}] {ano}: {len(rows)} municípios ({sum(contagem.values()):,} casos)")

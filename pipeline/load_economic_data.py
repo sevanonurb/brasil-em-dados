@@ -17,7 +17,10 @@ Correções aplicadas após leitura dos docs das APIs:
 import json
 import os
 import pathlib
+import threading
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -94,99 +97,117 @@ def baixar_pib_ibge(ano: int) -> dict[int, float]:
 #   A resposta sempre contém todos os registros do demonstrativo para o ente/período.
 #   Filtro deve ser feito localmente pelos campos `cod_conta` e `coluna`.
 #
-# Conta alvo: cod_conta = "ReceitasExcetoIntraOrcamentarias"
-# Coluna alvo: coluna = "Até o Bimestre (c)"  → receita realizada acumulada no ano
+# CORREÇÃO (23/10/2026) — medida, não suposta:
+#   1. Município com menos de 50 mil habitantes pode entregar o "RREO Simplificado" (LRF art. 63).
+#      Pedir só co_tipo_demonstrativo=RREO devolvia 0 itens para eles: em 2023 só 3.253 de 5.570
+#      municípios tinham receita. Numa amostra de 20 dos faltantes, 20/20 tinham o Simplificado.
+#   2. Saúde e educação liam a linha de "mínimo constitucional" (anexos 12/8 e 14), que deixou de
+#      vir no RREO e, onde vinha, era diferença ou percentual: 321 valores < R$ 1.000 (vários
+#      negativos) e 193 acima de 60% da receita. Agora: despesa LIQUIDADA por FUNÇÃO no Anexo 02
+#      (função 10 Saúde, 12 Educação), exceto intra-orçamentárias — presente nos dois tipos e em
+#      todos os anos testados (2015, 2019, 2023).
+#   3. Erro de rede/limite virava "sem dado" em silêncio (except: return None). Agora há nova
+#      tentativa com espera, e o resultado distingue "vazio na fonte" de "erro".
+#
+# Receita: Anexo 01, cod_conta "ReceitasExcetoIntraOrcamentarias", coluna "Até o Bimestre (c)".
 
 SICONFI_BASE = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/rreo"
-
-# Parâmetros: an_exercicio é injetado dinamicamente por ano
-SICONFI_PARAMS = "?an_exercicio={ano}&nr_periodo=6&co_tipo_demonstrativo=RREO&id_ente={cod_ibge}"
+TIPOS_RREO = ("RREO", "RREO Simplificado")
 
 COD_CONTA_ALVO = "ReceitasExcetoIntraOrcamentarias"
 COLUNA_ALVO    = "Até o Bimestre (c)"
-
-# Gasto em saúde (LC 141/2012 — mínimo constitucional Saúde)
-# Fonte: RREO Anexo 10 — Despesas com Ações e Serviços Públicos de Saúde
-COD_CONTA_SAUDE  = "AplicacaoTotalDasDespesasComAcoesEServicosPublicosDeSaude"
-COLUNA_SAUDE     = "Valor Apurado Até o Bimestre"
-
-# Gasto em educação (CF art. 212 — mínimo constitucional MDE)
-# Fonte: RREO Demonstrativo Simplificado — Mínimo Anual da Receita de Impostos na MDE
-COD_CONTA_EDU    = "MinimoAnualDasReceitasDeImpostosNaManutencaoEDesenvolvimentoDoEnsinoDemonstrativoSimplificado"
-COLUNA_EDU       = "Valor Apurado Até o Bimestre"
+CONTA_FUNCAO   = "RREO2TotalDespesas"                       # exceto intra-orçamentárias
+COLUNA_FUNCAO  = "DESPESAS LIQUIDADAS ATÉ O BIMESTRE (d)"
 
 
-def _fetch_receita_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None, float | None, float | None]:
-    """Retorna (cod_ibge, receita_total, despesa_saude, despesa_educacao)."""
-    url = SICONFI_BASE + SICONFI_PARAMS.format(ano=ano, cod_ibge=cod_ibge)
+class _Ritmo:
+    """Limite de requisições COMPARTILHADO entre threads. Medido em 23/10/2026: em sequência, 2 req/s
+    passam sem erro; 10 threads livres levam HTTP 429 em 54 de 60 — o loader antigo usava 40 e
+    transformava o 429 em "sem dado". No 429 a pausa vale para todas as threads."""
+    def __init__(self, por_segundo: float = 1.8):
+        self.intervalo, self.proximo, self.trava = 1 / por_segundo, 0.0, threading.Lock()
+
+    def esperar(self):
+        with self.trava:
+            agora = time.monotonic()
+            vez = max(agora, self.proximo)
+            self.proximo = vez + self.intervalo
+        time.sleep(max(0.0, vez - agora))
+
+    def punir(self, segundos: float):
+        with self.trava:
+            self.proximo = max(self.proximo, time.monotonic() + segundos)
+
+
+RITMO = _Ritmo()
+
+
+def _anexo(cod_ibge: int, ano: int, tipo: str, anexo: str, tentativas: int = 8) -> list:
+    q = urllib.parse.urlencode({"an_exercicio": ano, "nr_periodo": 6, "co_tipo_demonstrativo": tipo,
+                                "no_anexo": anexo, "id_ente": cod_ibge})
+    for t in range(tentativas):
+        RITMO.esperar()
+        try:
+            req = urllib.request.Request(f"{SICONFI_BASE}?{q}", headers={"User-Agent": "brasil-em-dados/1.0"})
+            return json.loads(urllib.request.urlopen(req, timeout=90).read()).get("items", [])
+        except urllib.error.HTTPError as e:
+            if t == tentativas - 1:
+                raise
+            if e.code == 429:
+                RITMO.punir(30 * (t + 1))
+            else:
+                time.sleep(2 ** t)
+        except Exception:
+            if t == tentativas - 1:
+                raise
+            time.sleep(2 ** t)
+
+
+def _fetch_receita_municipio(cod_ibge: int, ano: int, tipo_primeiro: str = "RREO"):
+    """Retorna (cod_ibge, receita, saude, educacao, tipo_usado | None, erro | None)."""
+    tipos = (tipo_primeiro,) + tuple(t for t in TIPOS_RREO if t != tipo_primeiro)
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "brasil-em-dados/1.0"})
-        resp = urllib.request.urlopen(req, timeout=20)
-        data = json.loads(resp.read())
-        items = data.get("items", [])
-
-        receita = saude = educacao = None
-
-        for item in items:
-            cod = item.get("cod_conta", "")
-            col = item.get("coluna", "")
-
-            # Receita total
-            if receita is None and cod == COD_CONTA_ALVO and col == COLUNA_ALVO:
-                try: receita = float(item["valor"])
-                except (TypeError, ValueError): pass
-
-            # Despesa saúde (ASPS)
-            if saude is None and cod == COD_CONTA_SAUDE and col == COLUNA_SAUDE:
-                try: saude = float(item["valor"])
-                except (TypeError, ValueError): pass
-
-            # Despesa educação (MDE)
-            if educacao is None and cod == COD_CONTA_EDU and col == COLUNA_EDU:
-                try: educacao = float(item["valor"])
-                except (TypeError, ValueError): pass
-
-        # Fallback receita: nome completo da conta
-        if receita is None:
-            for item in items:
-                conta = item.get("conta", "")
-                if "EXCETO INTRA" in conta and item.get("coluna") == COLUNA_ALVO:
-                    try: receita = float(item["valor"])
-                    except (TypeError, ValueError): pass
-                    break
-
-        return cod_ibge, receita, saude, educacao
-    except Exception:
-        return cod_ibge, None, None, None
+        for tipo in tipos:
+            a1 = _anexo(cod_ibge, ano, tipo, "RREO-Anexo 01")
+            if not a1:
+                continue
+            a2 = _anexo(cod_ibge, ano, tipo, "RREO-Anexo 02")
+            receita = next((float(i["valor"]) for i in a1
+                            if i.get("cod_conta") == COD_CONTA_ALVO and i.get("coluna") == COLUNA_ALVO
+                            and i.get("valor") is not None), None)
+            funcao = {i["conta"]: float(i["valor"]) for i in a2
+                      if i.get("cod_conta") == CONTA_FUNCAO and i.get("coluna") == COLUNA_FUNCAO
+                      and i.get("conta") in ("Saúde", "Educação") and i.get("valor") is not None}
+            return cod_ibge, receita, funcao.get("Saúde"), funcao.get("Educação"), tipo, None
+        return cod_ibge, None, None, None, None, None          # vazio nos dois tipos: lacuna da fonte
+    except Exception as e:
+        return cod_ibge, None, None, None, None, f"{type(e).__name__}: {e}"[:120]
 
 
-def baixar_receita_siconfi(
-    cod_ibge_list: list[int], ano: int, workers: int = 40
-) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
-    """Retorna (receita_map, saude_map, educacao_map) em uma única passagem pela API."""
-    print(f"  Baixando receita + despesas Siconfi RREO {ano} para {len(cod_ibge_list)} municípios...")
-    receita_map: dict[int, float] = {}
-    saude_map:   dict[int, float] = {}
-    edu_map:     dict[int, float] = {}
-    done = 0
+def baixar_receita_siconfi(cod_ibge_list: list[int], ano: int, workers: int = 4,
+                           tipo_primeiro: dict[int, str] | None = None, ao_receber=None):
+    """Retorna (receita_map, saude_map, educacao_map, erros). tipo_primeiro: palpite por município
+    (o tipo que ele entregou antes), só para economizar uma requisição."""
+    print(f"  Siconfi RREO {ano}: {len(cod_ibge_list)} municípios...", flush=True)
+    receita_map, saude_map, edu_map, erros = {}, {}, {}, {}
     t0 = time.time()
-
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_fetch_receita_municipio, cod, ano): cod for cod in cod_ibge_list}
-        for future in as_completed(futures):
-            cod_ibge, receita, saude, educacao = future.result()
-            if receita   is not None: receita_map[cod_ibge] = receita
-            if saude     is not None: saude_map[cod_ibge]   = saude
-            if educacao  is not None: edu_map[cod_ibge]     = educacao
-            done += 1
-            if done % 500 == 0:
-                elapsed = time.time() - t0
-                print(f"    {done}/{len(cod_ibge_list)} ({elapsed:.0f}s)"
-                      f" — receita={len(receita_map)} saude={len(saude_map)} edu={len(edu_map)}")
-
-    print(f"    → receita={len(receita_map)} saude={len(saude_map)} edu={len(edu_map)}"
-          f" / {len(cod_ibge_list)} municípios ({time.time()-t0:.0f}s)")
-    return receita_map, saude_map, edu_map
+        futs = [pool.submit(_fetch_receita_municipio, c, ano, (tipo_primeiro or {}).get(c, "RREO"))
+                for c in cod_ibge_list]
+        for n, fut in enumerate(as_completed(futs), 1):
+            cod, receita, saude, edu, _tipo, erro = fut.result()
+            if ao_receber:
+                ao_receber(cod, receita, saude, edu, erro)
+            if receita is not None: receita_map[cod] = receita
+            if saude is not None:   saude_map[cod] = saude
+            if edu is not None:     edu_map[cod] = edu
+            if erro:                erros[cod] = erro
+            if n % 500 == 0:
+                print(f"    {n}/{len(cod_ibge_list)} ({time.time()-t0:.0f}s) receita={len(receita_map)} "
+                      f"saude={len(saude_map)} edu={len(edu_map)} erros={len(erros)}", flush=True)
+    print(f"    → receita={len(receita_map)} saude={len(saude_map)} edu={len(edu_map)} erros={len(erros)}"
+          f" / {len(cod_ibge_list)} ({time.time()-t0:.0f}s)", flush=True)
+    return receita_map, saude_map, edu_map, erros
 
 
 # ─── 3. Inserção no PostGIS ───────────────────────────────────────────────────
@@ -217,10 +238,11 @@ def inserir_siconfi(pib_map: dict, receita_map: dict, ano: int,
                 VALUES %s
                 ON CONFLICT (cod_municipio, ano) DO UPDATE SET
                     receita_total      = EXCLUDED.receita_total,
-                    pib                = EXCLUDED.pib,
+                    pib                = COALESCE(EXCLUDED.pib, economia.siconfi_municipios.pib),
                     despesa_saude      = EXCLUDED.despesa_saude,
                     despesa_educacao   = EXCLUDED.despesa_educacao,
-                    transferencias_sus = EXCLUDED.transferencias_sus
+                    -- este loader não baixa transferências nem (em todo ano) PIB: NULL não pode apagar o que há
+                    transferencias_sus = COALESCE(EXCLUDED.transferencias_sus, economia.siconfi_municipios.transferencias_sus)
                 """,
                 rows,
                 page_size=1000,
@@ -434,9 +456,11 @@ if __name__ == "__main__":
 
         receita_map, saude_map, edu_map = {}, {}, {}
         if ano in args.anos_siconfi:
-            receita_map, saude_map, edu_map = baixar_receita_siconfi(
+            receita_map, saude_map, edu_map, erros = baixar_receita_siconfi(
                 cod_list, ano, workers=args.workers
             )
+            if erros:
+                print(f"  ⚠ {len(erros)} municípios com erro de rede (não é lacuna da fonte): rode de novo")
 
         if pib_map or receita_map or saude_map or edu_map:
             inserir_siconfi(pib_map, receita_map, ano, saude_map=saude_map, edu_map=edu_map)
