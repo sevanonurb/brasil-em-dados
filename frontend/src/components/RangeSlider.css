@@ -1,8 +1,8 @@
 /* Dual-handle range slider — dois thumbs na mesma linha */
 .dual-range {
   position: relative;
-  height: 20px;
-  margin: 4px 0;
+  height: 24px;            /* alvo de toque mínimo (WCAG 2.5.8) */
+  margin: 2px 0;
 }
 
 .dual-range__track {

@@ -1729,8 +1729,8 @@ export default function App() {
                       background: "rgba(13,15,22,0.88)", color: "#cbd5e0", font: "11px/1.6 system-ui, sans-serif",
                       padding: "1px 12px", textAlign: "center", pointerEvents: "none",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          Static demo · states and municipalities, all 94 indicators and years, default filters ·
-          census tracts, addresses and cause/sex/race/age filters need the full stack
+          Static demo · states and municipalities, all 94 indicators and years, mortality by cause/sex/race/age ·
+          census tracts and addresses need the full stack
         </div>
       )}
       {/* Mapa integrado: MapLibre + deck.gl (interleaved) */}

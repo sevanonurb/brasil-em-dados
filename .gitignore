@@ -54,6 +54,7 @@ nginx/cache/
 
 # static demo: generated artefacts (published on the gh-pages branch, not on main)
 demo/dados/
+demo/cubo/
 demo/web/
 demo/dist/
 demo/anos.json

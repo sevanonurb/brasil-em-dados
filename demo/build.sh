@@ -24,9 +24,11 @@ ogr2ogr -overwrite -f PMTiles demo/web/labels_municipios.pmtiles "$PG" -sql "sel
 
 # 3. values: every indicator-year pair, from the same api.tiles_* functions the panel uses (resumable)
 python3 demo/extrair_catalogo.py
+# 3b. mortality count cube: any cause × sex × race × age combination is summed in the browser
+python3 demo/extrair_cubo.py
 
 # 4. frontend in demo mode
 (cd frontend && VITE_DEMO=1 VITE_MARTIN_URL=/martin VITE_API_URL= npx vite build --base=/brasil-em-dados/ --outDir ../demo/dist --emptyOutDir)
-mkdir -p demo/dist/demo && cp demo/web/* demo/dist/demo/ && cp -r demo/dados demo/dist/demo/dados
+mkdir -p demo/dist/demo && cp demo/web/* demo/dist/demo/ && cp -r demo/dados demo/dist/demo/dados && cp -r demo/cubo demo/dist/demo/cubo
 touch demo/dist/.nojekyll
 du -sh demo/dist

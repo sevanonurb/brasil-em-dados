@@ -522,15 +522,7 @@ export function PainelControles({
           </div>
 
           {/* Causa de morte (apenas quando métrica de saúde) */}
-          {/* a demo foi extraída com os filtros padrão: causa, sexo, raça e idade não existem nela.
-              Mostrá-los trocava a escala sem trocar o valor, e o mapa saía errado com cara de certo. */}
-          {DEMO && METRICAS_SAUDE.includes(filtros.metrica) && (
-            <div style={{ fontSize: 11, color: "#a0aec0", lineHeight: 1.4 }}>
-              Filtros por causa, sexo, cor/raça e idade só existem no painel completo.
-            </div>
-          )}
-
-          {!DEMO && ["taxa_mortalidade"].includes(filtros.metrica) && (
+          {["taxa_mortalidade"].includes(filtros.metrica) && (
             <div>
               <label style={{ fontSize: 11, color: "#a0aec0", display: "block", marginBottom: 4 }}>
                 CAUSA (CID-10)
@@ -549,7 +541,7 @@ export function PainelControles({
           )}
 
           {/* Filtros demográficos — para todas as métricas de saúde com microdados */}
-          {!DEMO && METRICAS_SAUDE.includes(filtros.metrica) && (<>
+          {METRICAS_SAUDE.includes(filtros.metrica) && (<>
 
             {/* Sexo */}
             <div>
@@ -677,6 +669,7 @@ const selectStyle = {
 const chipStyle = {
   border: "none",
   borderRadius: 4,
+  minHeight: 24,          // alvo de toque mínimo (WCAG 2.5.8)
   padding: "4px 8px",
   fontSize: 11,
   cursor: "pointer",

@@ -292,7 +292,9 @@ def e4_particoes(p):
     causas = s.pg.locator("select").nth(3).evaluate("e=>[...e.options].map(o=>[o.value,o.text])")
     for v, t in causas[1:]:
         s.limpar(); selecionar(s, 3, v)
-        dado_novo = any(("/dados/" in u) or ("cid10_capitulo=" in u and "/demo/" not in u) for u in s.pedidos)
+        # dado novo: pedido ao servidor, ou (demo) cubo de contagens somado no navegador
+        dado_novo = any(("/dados/" in u) or ("/cubo/" in u) or ("cid10_capitulo=" in u and "/demo/" not in u) for u in s.pedidos) \
+            or s.pg.evaluate("Boolean(window.__demoTaxas)")
         erros, _ = s.limpar(); f = s.fracao_colorida(); mudou = s.diferenca(q_ref, s.quadro(mapa=True)) > 0.01; dom = s.tom_dominante()
         if erros: estado, nota = "FALHA", f"erros {erros[:1]}"
         elif dom > 0.85: estado, nota = "FALHA", f"mapa saturado: {dom:.0%} dos pixels num tom só (escala não corresponde ao dado)"
