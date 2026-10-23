@@ -50,23 +50,17 @@ BEGIN
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_uf
         ),
-        -- Denominador racial: soma das populações da raça selecionada em todos os
-        -- municípios da UF. Vazio quando v_cor_raca IS NULL (COALESCE → -1).
-        pop_raca AS (
-            SELECT gm.cod_uf, SUM(pr.populacao)::FLOAT8 AS populacao
-            FROM censo.populacao_raca_municipio pr
-            JOIN geo.municipios gm ON gm.cod_ibge_7 = pr.cod_municipio
-            WHERE pr.cor_raca = COALESCE(v_cor_raca, -1)
-            GROUP BY gm.cod_uf
-        ),
-        -- Denominador etário: soma das faixas selecionadas por UF.
-        -- Vazio quando intervalo padrão (0-17) — condição booleana é FALSE.
-        pop_faixa AS (
-            SELECT gm.cod_uf, SUM(pf.populacao)::FLOAT8 AS populacao
-            FROM censo.populacao_faixa_municipio pf
-            JOIN geo.municipios gm ON gm.cod_ibge_7 = pf.cod_municipio
-            WHERE pf.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
-              AND (v_faixa_min <> 0 OR v_faixa_max <> 17)
+        -- Denominador do MESMO subgrupo do numerador: Censo 2022 por raça × sexo × idade (SIDRA 9606).
+        -- Antes, sexo usava a população total e raça+idade supunha independência (pr × pf / total).
+        -- Vazio sem filtro demográfico: aí vale populacao_2022.
+        pop_sub AS (
+            SELECT gm.cod_uf, SUM(p.populacao)::FLOAT8 AS populacao
+            FROM censo.populacao_rsi_municipio p
+            JOIN geo.municipios gm ON gm.cod_ibge_7 = p.cod_municipio
+            WHERE p.cor_raca = COALESCE(v_cor_raca, 0)
+              AND (v_sexo IS NULL OR p.sexo = v_sexo)
+              AND p.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
+              AND (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
             GROUP BY gm.cod_uf
         )
         SELECT
@@ -81,20 +75,9 @@ BEGIN
             CASE
                 WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
-                        CASE
-                            -- Ambos os filtros: estimativa proporcional (raça × faixa / total)
-                            WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
-                                COALESCE(pr.populacao, 0.0) * COALESCE(pf.populacao, 0.0)
-                                / NULLIF(u.populacao_2022::FLOAT8, 0.0)
-                            -- Só raça: usa população da raça na UF
-                            WHEN v_cor_raca IS NOT NULL THEN
-                                COALESCE(pr.populacao, u.populacao_2022::FLOAT8)
-                            -- Só faixa etária: usa soma das faixas na UF
-                            WHEN v_faixa_min <> 0 OR v_faixa_max <> 17 THEN
-                                COALESCE(pf.populacao, u.populacao_2022::FLOAT8)
-                            -- Sem filtro demográfico: população total da UF
-                            ELSE u.populacao_2022::FLOAT8
-                        END
+                        CASE WHEN (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
+                             THEN ps.populacao
+                             ELSE u.populacao_2022::FLOAT8 END
                     , 0.0))::NUMERIC, 1)::FLOAT8
                 WHEN v_metrica = 'pib_per_capita' THEN
                     econ.pib_estadual / NULLIF(u.populacao_2022::FLOAT8, 0)
@@ -203,8 +186,7 @@ BEGIN
             GROUP BY gm.cod_uf
         ) ideb_uf ON ideb_uf.cod_uf = u.cod_uf
         LEFT JOIN mortalidade_agg ma ON ma.cod_uf = u.cod_uf
-        LEFT JOIN pop_raca pr        ON pr.cod_uf = u.cod_uf
-        LEFT JOIN pop_faixa pf       ON pf.cod_uf = u.cod_uf
+        LEFT JOIN pop_sub ps          ON ps.cod_uf = u.cod_uf
         WHERE u.geom && bbox_4674
     ) tile
     WHERE geom_mvt IS NOT NULL;
@@ -270,19 +252,17 @@ BEGIN
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
         ),
-        -- Denominador racial por município (vazio quando v_cor_raca IS NULL)
-        pop_raca AS (
-            SELECT pr.cod_municipio, pr.populacao::FLOAT8 AS populacao
-            FROM censo.populacao_raca_municipio pr
-            WHERE pr.cor_raca = COALESCE(v_cor_raca, -1)
-        ),
-        -- Denominador etário por município (vazio quando intervalo padrão 0-17)
-        pop_faixa AS (
-            SELECT pf.cod_municipio, SUM(pf.populacao)::FLOAT8 AS populacao
-            FROM censo.populacao_faixa_municipio pf
-            WHERE pf.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
-              AND (v_faixa_min <> 0 OR v_faixa_max <> 17)
-            GROUP BY pf.cod_municipio
+        -- Denominador do MESMO subgrupo do numerador: Censo 2022 por raça × sexo × idade (SIDRA 9606).
+        -- Antes, sexo usava a população total e raça+idade supunha independência (pr × pf / total).
+        -- Vazio sem filtro demográfico: aí vale populacao_2022.
+        pop_sub AS (
+            SELECT p.cod_municipio, SUM(p.populacao)::FLOAT8 AS populacao
+            FROM censo.populacao_rsi_municipio p
+            WHERE p.cor_raca = COALESCE(v_cor_raca, 0)
+              AND (v_sexo IS NULL OR p.sexo = v_sexo)
+              AND p.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
+              AND (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
+            GROUP BY p.cod_municipio
         )
         SELECT
             m.cod_ibge_7,
@@ -295,21 +275,9 @@ BEGIN
             CASE
                 WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
-                        CASE
-                            WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
-                                -- Ambos: estimativa proporcional raça × faixa / total
-                                COALESCE(pr.populacao, 0.0) * COALESCE(pf.populacao, 0.0)
-                                / NULLIF(m.populacao_2022::FLOAT8, 0.0)
-                            WHEN v_cor_raca IS NOT NULL THEN
-                                -- Só raça: usa população da raça neste município
-                                COALESCE(pr.populacao, m.populacao_2022::FLOAT8)
-                            WHEN v_faixa_min <> 0 OR v_faixa_max <> 17 THEN
-                                -- Só faixa etária: usa soma das faixas neste município
-                                COALESCE(pf.populacao, m.populacao_2022::FLOAT8)
-                            ELSE
-                                -- Sem filtro demográfico: população total
-                                m.populacao_2022::FLOAT8
-                        END
+                        CASE WHEN (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
+                             THEN ps.populacao
+                             ELSE m.populacao_2022::FLOAT8 END
                     , 0.0))::NUMERIC, 1)::FLOAT8
                 WHEN v_metrica = 'pib_per_capita' THEN
                     e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
@@ -374,8 +342,7 @@ BEGIN
         LEFT JOIN educacao.ideb_municipios ideb
             ON ideb.cod_municipio = m.cod_ibge_7 AND ideb.ano = v_ano
         LEFT JOIN mortalidade_agg ma ON ma.cod_municipio = m.cod_ibge_7 / 10
-        LEFT JOIN pop_raca pr        ON pr.cod_municipio = m.cod_ibge_7
-        LEFT JOIN pop_faixa pf       ON pf.cod_municipio = m.cod_ibge_7
+        LEFT JOIN pop_sub ps          ON ps.cod_municipio = m.cod_ibge_7
         WHERE m.geom && bbox_4674
           AND (v_cod_uf IS NULL OR m.cod_uf = v_cod_uf)
     ) tile
@@ -621,19 +588,18 @@ BEGIN
               AND (v_faixa_min = 0 AND v_faixa_max = 17 OR s.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max)
             GROUP BY s.cod_municipio
         ),
-        pop_raca AS (
-            SELECT pr.cod_municipio, pr.populacao::FLOAT8 AS populacao
-            FROM censo.populacao_raca_municipio pr
-            WHERE pr.cor_raca = COALESCE(v_cor_raca, -1)
-              AND pr.cod_municipio IN (SELECT mt.cod_municipio FROM muns_no_tile mt)
-        ),
-        pop_faixa AS (
-            SELECT pf.cod_municipio, SUM(pf.populacao)::FLOAT8 AS populacao
-            FROM censo.populacao_faixa_municipio pf
-            WHERE pf.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
-              AND (v_faixa_min <> 0 OR v_faixa_max <> 17)
-              AND pf.cod_municipio IN (SELECT mt.cod_municipio FROM muns_no_tile mt)
-            GROUP BY pf.cod_municipio
+        -- Denominador do MESMO subgrupo do numerador: Censo 2022 por raça × sexo × idade (SIDRA 9606).
+        -- Antes, sexo usava a população total e raça+idade supunha independência (pr × pf / total).
+        -- Vazio sem filtro demográfico: aí vale populacao_2022.
+        pop_sub AS (
+            SELECT p.cod_municipio, SUM(p.populacao)::FLOAT8 AS populacao
+            FROM censo.populacao_rsi_municipio p
+            WHERE p.cor_raca = COALESCE(v_cor_raca, 0)
+              AND (v_sexo IS NULL OR p.sexo = v_sexo)
+              AND p.faixa_etaria BETWEEN v_faixa_min AND v_faixa_max
+              AND (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
+              AND p.cod_municipio IN (SELECT mt.cod_municipio FROM muns_no_tile mt)
+            GROUP BY p.cod_municipio
         )
         SELECT
             sc.cod_setor,
@@ -645,17 +611,9 @@ BEGIN
             CASE
                 WHEN v_metrica IN ('taxa_mortalidade', 'taxa_homicidio') THEN
                     ROUND((COALESCE(ma.contagem, 0) * 100000.0 / NULLIF(
-                        CASE
-                            WHEN v_cor_raca IS NOT NULL AND (v_faixa_min <> 0 OR v_faixa_max <> 17) THEN
-                                COALESCE(pr.populacao, 0.0) * COALESCE(pf.populacao, 0.0)
-                                / NULLIF(m.populacao_2022::FLOAT8, 0.0)
-                            WHEN v_cor_raca IS NOT NULL THEN
-                                COALESCE(pr.populacao, m.populacao_2022::FLOAT8)
-                            WHEN v_faixa_min <> 0 OR v_faixa_max <> 17 THEN
-                                COALESCE(pf.populacao, m.populacao_2022::FLOAT8)
-                            ELSE
-                                m.populacao_2022::FLOAT8
-                        END
+                        CASE WHEN (v_cor_raca IS NOT NULL OR v_sexo IS NOT NULL OR v_faixa_min <> 0 OR v_faixa_max <> 17)
+                             THEN ps.populacao
+                             ELSE m.populacao_2022::FLOAT8 END
                     , 0.0))::NUMERIC, 1)::FLOAT8
                 WHEN v_metrica = 'pib_per_capita' THEN
                     e.pib::FLOAT8 / NULLIF(m.populacao_2022::FLOAT8, 0)
@@ -721,8 +679,7 @@ BEGIN
             ON ideb.cod_municipio = sc.cod_municipio AND ideb.ano = v_ano
         -- Mortalidade: 6-dígitos (sim) ← 7-dígitos (setor) / 10
         LEFT JOIN mortalidade_agg ma ON ma.cod_municipio = sc.cod_municipio / 10
-        LEFT JOIN pop_raca pr        ON pr.cod_municipio = sc.cod_municipio
-        LEFT JOIN pop_faixa pf       ON pf.cod_municipio = sc.cod_municipio
+        LEFT JOIN pop_sub ps          ON ps.cod_municipio = sc.cod_municipio
     ) tile
     WHERE geom_mvt IS NOT NULL;
 
