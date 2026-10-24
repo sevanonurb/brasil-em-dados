@@ -18,6 +18,8 @@ import json
 import os
 import pathlib
 import threading
+import errno
+import socket
 import time
 import urllib.error
 import urllib.parse
@@ -157,10 +159,42 @@ def _anexo(cod_ibge: int, ano: int, tipo: str, anexo: str, tentativas: int = 8) 
                 RITMO.punir(30 * (t + 1))
             else:
                 time.sleep(2 ** t)
+        except urllib.error.URLError as e:
+            if _sem_rede(e):              # queda de internet não gasta tentativa: espera a rede voltar
+                _esperar_rede()
+                continue
+            if t == tentativas - 1:
+                raise
+            time.sleep(2 ** t)
         except Exception:
             if t == tentativas - 1:
                 raise
             time.sleep(2 ** t)
+    raise RuntimeError("tentativas esgotadas")
+
+
+def _sem_rede(e: urllib.error.URLError) -> bool:
+    return isinstance(e.reason, (socket.gaierror, OSError)) and getattr(e.reason, "errno", None) in (
+        socket.EAI_AGAIN, socket.EAI_NONAME, errno.ENETUNREACH, errno.EHOSTUNREACH)
+
+
+_REDE = threading.Lock()
+
+
+def _esperar_rede():
+    """Medido em 23→24/10/2026: com o DNS fora, 1.780 municípios viraram erro em 22h e o ano inteiro
+    foi perdido. Agora todas as threads param aqui até o host do Tesouro voltar a resolver."""
+    host = urllib.parse.urlparse(SICONFI_BASE).hostname
+    with _REDE:
+        desde = time.monotonic()
+        while True:
+            try:
+                socket.getaddrinfo(host, 443)
+                break
+            except OSError:
+                time.sleep(60)
+        if time.monotonic() - desde > 1:
+            print(f"    (rede fora por {int(time.monotonic() - desde)}s; retomando)", flush=True)
 
 
 def _fetch_receita_municipio(cod_ibge: int, ano: int, tipo_primeiro: str = "RREO"):

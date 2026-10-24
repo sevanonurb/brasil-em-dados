@@ -3,10 +3,13 @@
 # SÓ se o testador der 0 FALHA. Uso: systemd-run --user ... bash demo/apos_siconfi.sh
 set -u
 cd "$(dirname "$0")/.."
+# só o journal DESTA execução: o da unidade acumula as anteriores (um "NÃO gravado" velho bloquearia tudo)
+DESDE=$(date -d "-10 min" "+%F %T")
+log() { journalctl --user -u siconfi-recarga --since "$DESDE" --no-pager -o cat; }
 while systemctl --user is-active -q siconfi-recarga; do sleep 120; done
-echo "== siconfi terminou: $(journalctl --user -u siconfi-recarga --no-pager -o cat | grep -c GRAVADO) anos gravados"
-journalctl --user -u siconfi-recarga --no-pager -o cat | grep -E "GRAVADO|NÃO gravado"
-if journalctl --user -u siconfi-recarga --no-pager -o cat | grep -q "NÃO gravado"; then
+echo "== siconfi terminou: $(log | grep -c GRAVADO) anos gravados"
+log | grep -E "GRAVADO|NÃO gravado"
+if log | grep -q "NÃO gravado"; then
   echo "== há ano com erro de rede: NÃO publico. Rode de novo pipeline/recarregar_siconfi.py (retoma)"; exit 1
 fi
 mkdir -p demo/dados-antes-siconfi
