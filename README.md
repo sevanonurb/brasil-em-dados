@@ -39,7 +39,7 @@ All public, all Brazilian federal:
 | **IBGE** | census (basic, housing, equipment), territorial meshes, census tracts, PPM, indicators |
 | **DataSUS** | CNES, SIH, SIM, SINAN, SINASC |
 | **INEP** | school census, IDEB, educational indicators |
-| **Tesouro Nacional / SICONFI** | fiscal management reports (RGF) |
+| **Tesouro Nacional / SICONFI** | fiscal management reports (RGF); budget execution (RREO and RREO Simplificado, 2015–2023): revenue and health/education spending per capita |
 | **SENATRAN** | vehicle fleet |
 | **CNEFE** | national address registry |
 

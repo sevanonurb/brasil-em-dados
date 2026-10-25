@@ -63,3 +63,4 @@ tests/e2e/relatorio*/
 pipeline/.cache/
 demo/dados-antes/
 demo/dados-antes2/
+demo/dados-antes-siconfi/
