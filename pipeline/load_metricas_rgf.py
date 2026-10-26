@@ -50,7 +50,34 @@ VARIANTES = [("RGF", "Q", 3), ("RGF Simplificado", "S", 2), ("RGF", "S", 2), ("R
 # dívida 5.261 valores com 11 acima de |300| — um único -17.970.525% levava o Mato Grosso do Sul a
 # -71.250% na média estadual ponderada.
 PLAUSIVEL = {"p": (5.0, 150.0), "d": (-500.0, 500.0)}
-CONTAS = {"DespesaTotalComPessoalDemonstrativo": "pessoal", "DividaConsolidadaLiquidaDemonstrativo": "divida"}
+CONTAS = {"DespesaTotalComPessoalDemonstrativo": "pessoal", "DividaConsolidadaLiquidaDemonstrativo": "divida",
+          "LimiteDefinidoPorResolucaoDoSenadoFederalDivida": "limite"}
+VERSAO = 2      # registros de cache anteriores (sem o recálculo) têm a dívida rebaixada
+
+
+def _plausivel(k, x):
+    return x is not None and PLAUSIVEL[k][0] <= x <= PLAUSIVEL[k][1]
+
+
+def _extrair(itens) -> tuple:
+    """(dívida %, pessoal %, dívida recalculada?). O % declarado vale quando é plausível. Senão a
+    dívida é recalculada como DCL ÷ limite do Senado × 120, porque o limite é 120% da RCL: em
+    2017–2018 o Anexo 06 só traz valores em reais, e em outros anos há municípios que puseram o
+    valor em reais no campo de % (ex.: 4.838.055.424 "%"). Medido em 26/10/2026: o recálculo bate
+    com o Anexo 02 em 7 de 8 testes (4 capitais × 2017–2018); a 8ª, BH 2018, dá 22,29 contra 18,95."""
+    pct, val = {}, {}
+    for it in itens:
+        chave = next((k for p, k in CONTAS.items() if it.get("cod_conta", "").startswith(p)), None)
+        if not chave or it.get("valor") is None:
+            continue
+        if "RCL" in it.get("coluna", "").upper():
+            pct.setdefault(chave, float(it["valor"]))
+        else:
+            val[chave] = float(it["valor"])         # a última coluna em reais é o fim do exercício
+    d, recalc = pct.get("divida"), False
+    if not _plausivel("d", d) and val.get("divida") is not None and val.get("limite", 0) > 0:
+        d, recalc = round(val["divida"] / val["limite"] * 120, 2), True
+    return d, pct.get("pessoal"), recalc
 
 
 def _anexo06(cod: int, ano: int, tipo: str, per: str, n: int, tentativas: int = 8) -> list:
@@ -84,20 +111,16 @@ def _anexo06(cod: int, ano: int, tipo: str, per: str, n: int, tentativas: int = 
 
 
 def buscar(cod: int, ano: int, primeiro: int = 0) -> dict:
-    """{"c", "d" (divida %), "p" (pessoal %), "v" (índice da variante), "erro"}"""
+    """{"c", "d" (divida %), "p" (pessoal %), "v" (índice da variante), "dr" (dívida recalculada), "r", "erro"}"""
     ordem = [primeiro] + [i for i in range(len(VARIANTES)) if i != primeiro]
     try:
         for i in ordem:
             itens = _anexo06(cod, ano, *VARIANTES[i])
             if not itens:
                 continue
-            v = {}
-            for it in itens:
-                chave = next((k for p, k in CONTAS.items() if it.get("cod_conta", "").startswith(p)), None)
-                if chave and "RCL" in it.get("coluna", "").upper() and it.get("valor") is not None:
-                    v.setdefault(chave, float(it["valor"]))
-            return {"c": cod, "d": v.get("divida"), "p": v.get("pessoal"), "v": i, "erro": None}
-        return {"c": cod, "d": None, "p": None, "v": None, "erro": None}      # não entregou: lacuna da fonte
+            d, p, recalc = _extrair(itens)
+            return {"c": cod, "d": d, "p": p, "v": i, "dr": recalc, "r": VERSAO, "erro": None}
+        return {"c": cod, "d": None, "p": None, "v": None, "r": VERSAO, "erro": None}   # não entregou: lacuna da fonte
     except Exception as e:
         return {"c": cod, "d": None, "p": None, "v": None, "erro": f"{type(e).__name__}: {e}"[:120]}
 
@@ -124,7 +147,8 @@ def main():
     for ano in ANOS:
         arq = CACHE / f"rgf-{ano}.jsonl"
         feitos = ler(arq)
-        faltam = [c for c in cods if c not in feitos or feitos[c].get("erro")]
+        faltam = [c for c in cods if c not in feitos or feitos[c].get("erro")
+                  or (feitos[c].get("r") != VERSAO and feitos[c]["v"] is not None and not _plausivel("d", feitos[c]["d"]))]
         if faltam:
             print(f"  RGF {ano}: {len(faltam)} municípios...", flush=True)
             t0, trava, n_err = time.time(), threading.Lock(), 0
@@ -143,7 +167,7 @@ def main():
         if erros:
             print(f"  {ano}: {len(erros)} com erro de rede — NÃO gravado; rode de novo para retomar", flush=True)
             continue
-        ok = lambda c, k: feitos[c][k] is not None and PLAUSIVEL[k][0] <= feitos[c][k] <= PLAUSIVEL[k][1]
+        ok = lambda c, k: _plausivel(k, feitos[c][k])
         linhas = [(c, m, ano, feitos[c][k]) for c in cods for m, k in (("divida_rcl", "d"), ("despesa_pessoal_rcl", "p"))
                   if ok(c, k)]
         with conn.cursor() as cur:
@@ -153,7 +177,7 @@ def main():
         simp = sum(1 for c in cods if feitos[c]["v"] in (1, 3))
         cnt = lambda k: sum(1 for c in cods if ok(c, k))
         fora = lambda k: sum(1 for c in cods if feitos[c][k] is not None and not ok(c, k))
-        print(f"  {ano}: GRAVADO — dívida {cnt('d')}, pessoal {cnt('p')} de {len(cods)} ({simp} pelo RGF Simplificado; "
+        print(f"  {ano}: GRAVADO — dívida {cnt('d')}, pessoal {cnt('p')} de {len(cods)} ({simp} pelo RGF Simplificado; dívida recalculada {sum(1 for c in cods if feitos[c].get("dr") and ok(c, "d"))}; "
               f"fora da faixa plausível, descartados: dívida {fora('d')}, pessoal {fora('p')})", flush=True)
 
 
