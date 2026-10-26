@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 DESDE=$(date -d "-10 min" "+%F %T")
 log() { journalctl --user -u $UNIDADE --since "$DESDE" --no-pager -o cat; }
 while systemctl --user is-active -q $UNIDADE; do sleep 120; done
-echo "== siconfi terminou: $(log | grep -c GRAVADO) anos gravados"
+echo "== $UNIDADE terminou: $(log | grep -c GRAVADO) anos gravados"
 log | grep -E "GRAVADO|NÃO gravado"
 if log | grep -q "NÃO gravado"; then
   echo "== há ano com erro de rede: NÃO publico. Rode a recarga de novo (retoma)"; exit 1
@@ -19,6 +19,13 @@ mkdir -p demo/dados-antes-siconfi
 for m in $METRICAS; do
   rm -rf demo/dados-antes-siconfi/$m; mv demo/dados/$m demo/dados-antes-siconfi/ 2>/dev/null
 done
+# o catálogo (anos por métrica) vem do banco: sem isto os anos novos não aparecem no painel
+python3 - <<'PY'
+import json, importlib.util
+s = importlib.util.spec_from_file_location("server", "api/server.py"); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+json.dump(m.query_anos(), open("demo/anos.json", "w"), default=int)
+PY
+cp demo/anos.json demo/web/anos.json
 python3 demo/extrair_catalogo.py | grep -E "ERRO|FIM"
 (cd frontend && VITE_DEMO=1 VITE_MARTIN_URL=/martin VITE_API_URL= npx vite build --base=/brasil-em-dados/ --outDir ../demo/dist --emptyOutDir 2>&1 | grep -E "error|built in")
 mkdir -p demo/dist/demo && cp demo/web/* demo/dist/demo/ && rm -rf demo/dist/demo/dados && cp -r demo/dados demo/dist/demo/dados && cp -r demo/cubo demo/dist/demo/cubo; touch demo/dist/.nojekyll

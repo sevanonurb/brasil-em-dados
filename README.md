@@ -83,7 +83,9 @@ More commands in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 This is an **independent build**, not a maintained product. What it does not have:
 
-- **No automated tests.** Dagster orchestrates the pipeline but there is no test suite.
+- **No unit tests.** What exists is end-to-end: a browser tester that clicks every control
+  (see *End-to-end tests*) and a validator that checks the demo's in-browser mortality rates
+  against the database. Dagster orchestrates the pipeline.
 - **Data does not refresh by itself.** Dagster is wired in but no schedule is defined —
   loaders are run manually.
 - **The metadata API is stdlib `http.server`** (`api/server.py`, 438 lines), not FastAPI.
@@ -93,6 +95,14 @@ This is an **independent build**, not a maintained product. What it does not hav
   CNEFE addresses need the full stack: `docker compose up postgis pgbouncer api martin frontend nginx`
   plus a data load.
 - Coverage and freshness follow the upstream sources, which vary by dataset and by year.
+- **Municipal debt / RCL (RGF) is noisy at the source.** Municipalities file it themselves, and
+  the reported ratio and the one implied by the same filing (debt ÷ Senate limit × 120) agree
+  within 0.05 pp in only 29 of 39 sampled filings (2016, 2020, 2023). The disagreements look
+  like filing errors on either side (×100 slips, flipped signs, the limit typed as the ratio).
+  The panel keeps the reported ratio when it is plausible, recomputes it when it is missing or
+  absurd (all of 2017–2018, where the ratio is not filed), and drops values outside ±500%.
+  Personnel spending / RCL is kept between 5% and 150%. Debt coverage is thin in 2017 (1,787
+  municipalities): 26 of 30 sampled gaps have no debt line in either Anexo 06 or Anexo 02.
 
 ## Static demo
 
