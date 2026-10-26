@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
-# Depois de pipeline/recarregar_siconfi.py: reextrai as 3 métricas de finanças, testa e publica
-# SÓ se o testador der 0 FALHA. Uso: systemd-run --user ... bash demo/apos_siconfi.sh
+# Depois de uma recarga longa (unidade systemd): reextrai as métricas dela, testa e publica SÓ se o
+# testador der 0 FALHA. Uso: systemd-run --user ... bash demo/apos_siconfi.sh [unidade métrica...]
+# (padrão: siconfi-recarga e as 3 métricas de finanças do RREO)
 set -u
+UNIDADE=${1:-siconfi-recarga}; shift || true
+METRICAS=${*:-receita_per_capita despesa_saude_per_capita despesa_educacao_per_capita}
 cd "$(dirname "$0")/.."
 # só o journal DESTA execução: o da unidade acumula as anteriores (um "NÃO gravado" velho bloquearia tudo)
 DESDE=$(date -d "-10 min" "+%F %T")
-log() { journalctl --user -u siconfi-recarga --since "$DESDE" --no-pager -o cat; }
-while systemctl --user is-active -q siconfi-recarga; do sleep 120; done
+log() { journalctl --user -u $UNIDADE --since "$DESDE" --no-pager -o cat; }
+while systemctl --user is-active -q $UNIDADE; do sleep 120; done
 echo "== siconfi terminou: $(log | grep -c GRAVADO) anos gravados"
 log | grep -E "GRAVADO|NÃO gravado"
 if log | grep -q "NÃO gravado"; then
-  echo "== há ano com erro de rede: NÃO publico. Rode de novo pipeline/recarregar_siconfi.py (retoma)"; exit 1
+  echo "== há ano com erro de rede: NÃO publico. Rode a recarga de novo (retoma)"; exit 1
 fi
 mkdir -p demo/dados-antes-siconfi
-for m in receita_per_capita despesa_saude_per_capita despesa_educacao_per_capita; do
+for m in $METRICAS; do
   rm -rf demo/dados-antes-siconfi/$m; mv demo/dados/$m demo/dados-antes-siconfi/ 2>/dev/null
 done
 python3 demo/extrair_catalogo.py | grep -E "ERRO|FIM"
@@ -23,6 +26,6 @@ mv tests/e2e/relatorio "tests/e2e/relatorio-pre-siconfi-$(date +%H%M)" 2>/dev/nu
 R=$(python3 tests/e2e/testador.py http://127.0.0.1:8392/brasil-em-dados/ 1 3 6 2>&1 | tee /dev/stderr | grep RESULTADO)
 echo "== LOCAL: $R"
 case "$R" in *" 0 FALHA"*) ;; *) echo "== testador com falha: NÃO publico"; exit 1;; esac
-(cd demo/dist && git add -A && git commit -qm "deploy: municipal finances (RREO Simplificado, spending by function)" && \
+(cd demo/dist && git add -A && git commit -qm "deploy: $UNIDADE ($METRICAS)" && \
   for t in 1 2 3; do git push -q origin gh-pages && break; sleep 60; done)
 echo "== publicado: $(cd demo/dist && git ls-remote origin gh-pages)"

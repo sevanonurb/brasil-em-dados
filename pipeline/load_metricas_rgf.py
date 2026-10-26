@@ -4,225 +4,157 @@ load_metricas_rgf.py
 Carrega indicadores fiscais do Siconfi RGF (Relatório de Gestão Fiscal) para
 api.metricas_municipio.
 
-Indicadores:
-  divida_rcl           — Dívida Consolidada Líquida / RCL (%)  [RGF Anexo 01]
-  despesa_pessoal_rcl  — Despesa Total com Pessoal / RCL (%)   [RGF Anexo 02]
+Indicadores (% da RCL ajustada, Poder Executivo, fim do exercício):
+  divida_rcl           — Dívida Consolidada Líquida / RCL   (limite LRF: 120%)
+  despesa_pessoal_rcl  — Despesa Total com Pessoal / RCL    (limite LRF: 54%)
 
-Referência legal:
-  Lei de Responsabilidade Fiscal (LC 101/2000)
-  Limite dívida: 120% da RCL
-  Limite pessoal: 54% da RCL
+Os dois vêm do RGF-Anexo 06 (Demonstrativo Simplificado), que todo município publica no último
+período do ano — no RGF completo (quadrimestral, período 3) e no RGF Simplificado (semestral,
+período 2), que é o que municípios < 50 mil hab. podem entregar (LRF art. 63). Medido em
+25/10/2026: o loader antigo só pedia o RGF quadrimestral e perdia 2.269 municípios em 2022 —
+20 de 20 sorteados entre eles tinham RGF Simplificado semestral; e o Anexo 06 repete exatamente
+os Anexos 01 (pessoal) e 02 (DCL, "Até o 3º Quadrimestre") em 3 capitais × 2015 e 2023.
+
+Do ano mais recente ao mais antigo; cada município baixado vai na hora para
+pipeline/.cache/rgf-<ano>.jsonl, então cair no meio não perde nada. Um ano só é gravado quando
+todos os municípios voltaram sem erro de rede — e então substitui as duas métricas daquele ano,
+descartando valor fora de PLAUSIVEL.
 
 Uso:
-    python load_metricas_rgf.py                          # anos 2019–2022
-    python load_metricas_rgf.py --anos 2020 2021 2022
-    python load_metricas_rgf.py --workers 20             # paralelismo (padrão 30)
+    python3 pipeline/load_metricas_rgf.py                  # 2023 → 2015
+    python3 pipeline/load_metricas_rgf.py 2022 2021
 """
 
-import argparse
-import os
+import json
+import pathlib
+import sys
+import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import psycopg2
-import requests
 from psycopg2.extras import execute_values
 
-DB_PARAMS = dict(
-    host=os.environ.get("POSTGRES_HOST", "localhost"),
-    port=int(os.environ.get("POSTGRES_PORT", 5432)),
-    database=os.environ.get("POSTGRES_DB", "brasil_dados"),
-    user=os.environ.get("POSTGRES_USER", "brasil"),
-    password=os.environ.get("POSTGRES_PASSWORD", ""),
-)
+from load_economic_data import RITMO, _esperar_rede, _sem_rede, get_conn
 
 RGF_BASE = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/rgf"
+CACHE = pathlib.Path(__file__).parent / ".cache"
+ANOS = [int(a) for a in sys.argv[1:]] or list(range(2023, 2014, -1))
 
-# Maior periodicidade da RGF: Q (quadrimestral), período 3 = dez acumulado 12 meses
-# Cobertura: jan-dez do exercício
-PERIODICIDADE = "Q"
-PERIODO = 3
+# (tipo, periodicidade, último período do ano)
+VARIANTES = [("RGF", "Q", 3), ("RGF Simplificado", "S", 2), ("RGF", "S", 2), ("RGF Simplificado", "Q", 3)]
+# Faixa plausível, % da RCL. Fora dela é erro de preenchimento na fonte, e não vai ao banco (o cache
+# guarda o bruto). Medido em 2023: pessoal 5.519 valores, p5 36,6 / p95 60,9, e casos de 0,43 e 5.031;
+# dívida 5.261 valores com 11 acima de |300| — um único -17.970.525% levava o Mato Grosso do Sul a
+# -71.250% na média estadual ponderada.
+PLAUSIVEL = {"p": (5.0, 150.0), "d": (-500.0, 500.0)}
+CONTAS = {"DespesaTotalComPessoalDemonstrativo": "pessoal", "DividaConsolidadaLiquidaDemonstrativo": "divida"}
 
 
-def fetch_rgf_municipio(cod_ibge: int, ano: int) -> tuple[int, float | None, float | None]:
-    """
-    Busca RGF do município e extrai:
-      - Dívida Consolidada Líquida / RCL% (Anexo 02, cod_conta=PercentualDaDCLSobreARCL)
-      - Despesa Total com Pessoal / RCL% (Anexo 01, cod_conta=DespesaComPessoalTotal,
-        coluna="% sobre a RCL Ajustada")
+def _anexo06(cod: int, ano: int, tipo: str, per: str, n: int, tentativas: int = 8) -> list:
+    q = urllib.parse.urlencode({"an_exercicio": ano, "in_periodicidade": per, "nr_periodo": n,
+                                "co_tipo_demonstrativo": tipo, "no_anexo": "RGF-Anexo 06",
+                                "co_esfera": "M", "co_poder": "E", "id_ente": cod})
+    for t in range(tentativas):
+        RITMO.esperar()
+        try:
+            req = urllib.request.Request(f"{RGF_BASE}?{q}", headers={"User-Agent": "brasil-em-dados/1.0"})
+            return json.loads(urllib.request.urlopen(req, timeout=90).read()).get("items", [])
+        except urllib.error.HTTPError as e:
+            if t == tentativas - 1:
+                raise
+            if e.code == 429:
+                RITMO.punir(30 * (t + 1))
+            else:
+                time.sleep(2 ** t)
+        except urllib.error.URLError as e:
+            if _sem_rede(e):
+                _esperar_rede()
+                continue
+            if t == tentativas - 1:
+                raise
+            time.sleep(2 ** t)
+        except Exception:
+            if t == tentativas - 1:
+                raise
+            time.sleep(2 ** t)
+    raise RuntimeError("tentativas esgotadas")
 
-    Parâmetros obrigatórios da API Siconfi RGF:
-      co_esfera=M (Municipal), co_poder=E (Executivo)
 
-    Retorna (cod_ibge, divida_rcl_pct, pessoal_rcl_pct).
-    """
-    divida_pct = None
-    pessoal_pct = None
-    base_params = {
-        "an_exercicio": ano,
-        "in_periodicidade": PERIODICIDADE,
-        "nr_periodo": PERIODO,
-        "co_tipo_demonstrativo": "RGF",
-        "id_ente": cod_ibge,
-        "co_esfera": "M",
-        "co_poder": "E",
-    }
-    headers = {"User-Agent": "brasil-em-dados/1.0"}
-
-    # ── Anexo 01 — Despesa de Pessoal ────────────────────────────────────────
+def buscar(cod: int, ano: int, primeiro: int = 0) -> dict:
+    """{"c", "d" (divida %), "p" (pessoal %), "v" (índice da variante), "erro"}"""
+    ordem = [primeiro] + [i for i in range(len(VARIANTES)) if i != primeiro]
     try:
-        r = requests.get(RGF_BASE,
-                         params={**base_params, "no_anexo": "RGF-Anexo 01", "limit": 200},
-                         timeout=20, headers=headers)
-        if r.status_code == 200:
-            for item in r.json().get("items", []):
-                if (item.get("cod_conta") == "DespesaComPessoalTotal"
-                        and "% sobre a RCL" in item.get("coluna", "")):
-                    try:
-                        pessoal_pct = float(item["valor"])
-                        break
-                    except (TypeError, ValueError):
-                        pass
-    except Exception:
-        pass
-
-    # ── Anexo 02 — Dívida Consolidada ────────────────────────────────────────
-    try:
-        r = requests.get(RGF_BASE,
-                         params={**base_params, "no_anexo": "RGF-Anexo 02", "limit": 200},
-                         timeout=20, headers=headers)
-        if r.status_code == 200:
-            for item in r.json().get("items", []):
-                if item.get("cod_conta") == "PercentualDaDCLSobreARCL":
-                    # Prefer "3º Quadrimestre" (full year); fallback to any quadrimestre
-                    col = item.get("coluna", "")
-                    if "3º" in col or "3o" in col.lower():
-                        try:
-                            divida_pct = float(item["valor"])
-                            break
-                        except (TypeError, ValueError):
-                            pass
-            # Fallback: any % da DCL entry
-            if divida_pct is None:
-                for item in r.json().get("items", []):
-                    if item.get("cod_conta") == "PercentualDaDCLSobreARCL":
-                        try:
-                            divida_pct = float(item["valor"])
-                            break
-                        except (TypeError, ValueError):
-                            pass
-    except Exception:
-        pass
-
-    return cod_ibge, divida_pct, pessoal_pct
+        for i in ordem:
+            itens = _anexo06(cod, ano, *VARIANTES[i])
+            if not itens:
+                continue
+            v = {}
+            for it in itens:
+                chave = next((k for p, k in CONTAS.items() if it.get("cod_conta", "").startswith(p)), None)
+                if chave and "RCL" in it.get("coluna", "").upper() and it.get("valor") is not None:
+                    v.setdefault(chave, float(it["valor"]))
+            return {"c": cod, "d": v.get("divida"), "p": v.get("pessoal"), "v": i, "erro": None}
+        return {"c": cod, "d": None, "p": None, "v": None, "erro": None}      # não entregou: lacuna da fonte
+    except Exception as e:
+        return {"c": cod, "d": None, "p": None, "v": None, "erro": f"{type(e).__name__}: {e}"[:120]}
 
 
-def probe_rgf_structure(cod_ibge: int, ano: int):
-    """Imprime estrutura do RGF para um município (diagnóstico)."""
-    for anexo in ["RGF-Anexo 01", "RGF-Anexo 02"]:
-        params = {
-            "an_exercicio": ano, "in_periodicidade": PERIODICIDADE,
-            "nr_periodo": PERIODO, "co_tipo_demonstrativo": "RGF",
-            "no_anexo": anexo, "id_ente": cod_ibge,
-            "co_esfera": "M", "co_poder": "E", "limit": 20,
-        }
-        print(f"\n  === {anexo} — município {cod_ibge} ano {ano} ===")
-        r = requests.get(RGF_BASE, params=params, timeout=30,
-                         headers={"User-Agent": "brasil-em-dados/1.0"})
-        if r.status_code != 200:
-            print(f"  HTTP {r.status_code}")
-            continue
-        items = r.json().get("items", [])[:10]
-        for item in items:
-            print(f"  cod_conta={item.get('cod_conta','')[:60]:<62}"
-                  f"  coluna={item.get('coluna','')[:40]:<42}"
-                  f"  valor={item.get('valor')}")
+def ler(arq):
+    feitos = {}
+    if arq.exists():
+        for linha in arq.read_text().splitlines():
+            d = json.loads(linha)
+            feitos[d["c"]] = d                 # a última linha de cada município vale
+    return feitos
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Carrega RGF Siconfi para api.metricas_municipio")
-    parser.add_argument("--anos", nargs="+", type=int,
-                        default=[2019, 2020, 2021, 2022],
-                        help="Anos do exercício (padrão: 2019–2022)")
-    parser.add_argument("--workers", type=int, default=30,
-                        help="Threads paralelas (padrão: 30)")
-    parser.add_argument("--probe", type=int, default=None,
-                        metavar="COD_IBGE",
-                        help="Imprime estrutura do RGF para um município específico e sai")
-    args = parser.parse_args()
-
-    conn = psycopg2.connect(**DB_PARAMS)
-    try:
+    CACHE.mkdir(exist_ok=True)
+    conn = get_conn()
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7 FROM geo.municipios ORDER BY 1")
+        cods = [r[0] for r in cur.fetchall()]
+        cur.execute("""CREATE TABLE IF NOT EXISTS api.metricas_rgf_antes_20261025 AS
+                       SELECT * FROM api.metricas_municipio WHERE metrica IN ('divida_rcl', 'despesa_pessoal_rcl')""")
+        conn.commit()
+    palpite = {}                               # a variante que o município usou no ano seguinte
+    for ano in ANOS:
+        arq = CACHE / f"rgf-{ano}.jsonl"
+        feitos = ler(arq)
+        faltam = [c for c in cods if c not in feitos or feitos[c].get("erro")]
+        if faltam:
+            print(f"  RGF {ano}: {len(faltam)} municípios...", flush=True)
+            t0, trava, n_err = time.time(), threading.Lock(), 0
+            with arq.open("a") as saida, ThreadPoolExecutor(max_workers=4) as pool:
+                futs = [pool.submit(buscar, c, ano, palpite.get(c, 0)) for c in faltam]
+                for n, fut in enumerate(as_completed(futs), 1):
+                    d = fut.result()
+                    n_err += bool(d["erro"])
+                    with trava:
+                        saida.write(json.dumps(d) + "\n"); saida.flush()
+                    if n % 500 == 0:
+                        print(f"    {n}/{len(faltam)} ({time.time()-t0:.0f}s) erros={n_err}", flush=True)
+            feitos = ler(arq)
+        palpite = {c: d["v"] for c, d in feitos.items() if d.get("v") is not None}
+        erros = [c for c in cods if feitos[c].get("erro")]
+        if erros:
+            print(f"  {ano}: {len(erros)} com erro de rede — NÃO gravado; rode de novo para retomar", flush=True)
+            continue
+        ok = lambda c, k: feitos[c][k] is not None and PLAUSIVEL[k][0] <= feitos[c][k] <= PLAUSIVEL[k][1]
+        linhas = [(c, m, ano, feitos[c][k]) for c in cods for m, k in (("divida_rcl", "d"), ("despesa_pessoal_rcl", "p"))
+                  if ok(c, k)]
         with conn.cursor() as cur:
-            cur.execute("SELECT cod_ibge_7 FROM geo.municipios ORDER BY cod_ibge_7")
-            municipios = [r[0] for r in cur.fetchall()]
-    finally:
-        conn.close()
-
-    # Modo probe: diagnóstico de estrutura do RGF
-    if args.probe:
-        probe_rgf_structure(args.probe, args.anos[-1])
-        return
-
-    print(f"Municípios: {len(municipios)}")
-
-    for ano in args.anos:
-        print(f"\n=== RGF {ano} — {len(municipios)} municípios ({args.workers} workers) ===")
-        t0 = time.time()
-
-        divida_map: dict[int, float] = {}
-        pessoal_map: dict[int, float] = {}
-        done = 0
-
-        with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(fetch_rgf_municipio, cod, ano): cod for cod in municipios}
-            for future in as_completed(futures):
-                cod_ibge, divida, pessoal = future.result()
-                if divida  is not None: divida_map[cod_ibge]  = divida
-                if pessoal is not None: pessoal_map[cod_ibge] = pessoal
-                done += 1
-                if done % 500 == 0:
-                    elapsed = time.time() - t0
-                    print(f"  {done}/{len(municipios)} — {elapsed:.0f}s"
-                          f"  divida={len(divida_map)} pessoal={len(pessoal_map)}")
-
-        elapsed = time.time() - t0
-        print(f"  Concluído {ano} em {elapsed:.0f}s"
-              f"  divida={len(divida_map)} pessoal={len(pessoal_map)}")
-
-        # Persistir no banco
-        rows = []
-        for cod, v in divida_map.items():
-            rows.append((cod, "divida_rcl", ano, v))
-        for cod, v in pessoal_map.items():
-            rows.append((cod, "despesa_pessoal_rcl", ano, v))
-
-        if rows:
-            db = psycopg2.connect(**DB_PARAMS)
-            try:
-                with db.cursor() as cur:
-                    execute_values(
-                        cur,
-                        """
-                        INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor)
-                        VALUES %s
-                        ON CONFLICT (cod_municipio, metrica, ano)
-                        DO UPDATE SET valor = EXCLUDED.valor
-                        """,
-                        rows,
-                        page_size=2000,
-                    )
-                db.commit()
-                print(f"  Upserted {len(rows):,} registros")
-            finally:
-                db.close()
-
-    print("\n=== Concluído ===")
-    print("Verificar com:")
-    print("  SELECT metrica, ano, COUNT(*), ROUND(AVG(valor)::numeric,2) AS media")
-    print("  FROM api.metricas_municipio")
-    print("  WHERE metrica IN ('divida_rcl','despesa_pessoal_rcl')")
-    print("  GROUP BY metrica, ano ORDER BY metrica, ano;")
+            cur.execute("DELETE FROM api.metricas_municipio WHERE ano = %s AND metrica IN ('divida_rcl', 'despesa_pessoal_rcl')", (ano,))
+            execute_values(cur, "INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor) VALUES %s", linhas, page_size=2000)
+            conn.commit()
+        simp = sum(1 for c in cods if feitos[c]["v"] in (1, 3))
+        cnt = lambda k: sum(1 for c in cods if ok(c, k))
+        fora = lambda k: sum(1 for c in cods if feitos[c][k] is not None and not ok(c, k))
+        print(f"  {ano}: GRAVADO — dívida {cnt('d')}, pessoal {cnt('p')} de {len(cods)} ({simp} pelo RGF Simplificado; "
+              f"fora da faixa plausível, descartados: dívida {fora('d')}, pessoal {fora('p')})", flush=True)
 
 
 if __name__ == "__main__":
