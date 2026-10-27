@@ -33,6 +33,11 @@ done
 (cd frontend && VITE_DEMO=1 VITE_MARTIN_URL=/martin VITE_API_URL= npx vite build --base=/brasil-em-dados/ --outDir ../demo/dist --emptyOutDir 2>&1 | grep -E "error|built in")
 mkdir -p demo/dist/demo && cp demo/web/* demo/dist/demo/ && rm -rf demo/dist/demo/dados && cp -r demo/dados demo/dist/demo/dados && cp -r demo/cubo demo/dist/demo/cubo; touch demo/dist/.nojekyll
 mv tests/e2e/relatorio "tests/e2e/relatorio-pre-siconfi-$(date +%H%M)" 2>/dev/null
+# o testador precisa do servidor local; se ele não está no ar, sobe só para este teste
+if ! curl -sf -o /dev/null http://127.0.0.1:8392/brasil-em-dados/; then
+  python3 demo/servir.py 8392 >/dev/null 2>&1 & SERV=$!; trap 'kill $SERV 2>/dev/null' EXIT
+  for i in $(seq 30); do curl -sf -o /dev/null http://127.0.0.1:8392/brasil-em-dados/ && break; sleep 0.5; done
+fi
 R=$(python3 tests/e2e/testador.py http://127.0.0.1:8392/brasil-em-dados/ 1 3 6 2>&1 | tee /dev/stderr | grep RESULTADO)
 echo "== LOCAL: $R"
 case "$R" in *" 0 FALHA"*) ;; *) echo "== testador com falha: NÃO publico"; exit 1;; esac

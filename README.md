@@ -38,9 +38,9 @@ All public, all Brazilian federal:
 |---|---|
 | **IBGE** | census (basic, housing, equipment), territorial meshes, census tracts, PPM, indicators |
 | **DataSUS** | CNES, SIH, SIM, SINAN, SINASC |
-| **INEP** | school census, IDEB, educational indicators |
+| **INEP** | school census, IDEB 2005–2023 (public network, from the 2023 release that carries the whole series), educational indicators |
 | **Tesouro Nacional / SICONFI** | fiscal management reports (RGF); budget execution (RREO and RREO Simplificado, 2015–2023): revenue and health/education spending per capita |
-| **SENATRAN** | vehicle fleet |
+| **SENATRAN** | vehicle fleet by municipality and type, December 2015–2025 |
 | **CNEFE** | national address registry |
 
 18 loaders in `pipeline/`.
@@ -100,6 +100,13 @@ This is an **independent build**, not a maintained product. What it does not hav
   leishmaniasis confirmed cases. Tuberculosis 2019 gives 74,212 new cases against 73,864 in the
   official bulletin. Counting raw notifications, as an earlier version did, overstated
   leishmaniasis about fivefold. Tuberculosis 2020–2023 comes from preliminary files.
+- **Vehicle fleet** comes from SENATRAN's December spreadsheet by municipality and type. Municipality names
+  are matched to IBGE codes, with a reviewed table for 41 old spellings, renamings and typos at the
+  source (e.g. Santarém/PB is now Joca Claudino); every year matches all 5,570 municipalities and the
+  summed fleet equals the spreadsheet's own total minus the "municipality not informed" rows. Trucks
+  include pickups (*caminhonete*, *camioneta*); buses include minibuses.
+- **Per-capita rates use the 2022 Census population for every year.** No annual municipal estimate
+  is loaded, so a rate for 2015 or 2025 is measured against 2022 population.
 - **Municipal debt / RCL (RGF) is noisy at the source.** Municipalities file it themselves, and
   the reported ratio and the one implied by the same filing (debt ÷ Senate limit × 120) agree
   within 0.05 pp in only 29 of 39 sampled filings (2016, 2020, 2023). The disagreements look

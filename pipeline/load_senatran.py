@@ -1,45 +1,44 @@
 #!/usr/bin/env python3
 """
 load_senatran.py
-Carrega dados de frota veicular por município (SENATRAN/DENATRAN/RENAVAM) para
+Carrega frota veicular por município (SENATRAN/RENAVAM, posição de dezembro) para
 api.metricas_municipio.
 
-Fonte: Dados Abertos do Ministério dos Transportes — RENAVAM / SENATRAN.
-URL base: https://dados.transportes.gov.br/dataset/registro-nacional-de-veiculos-automotores-renavam
+Indicadores (anuais, por 1000 hab. do Censo 2022, como os demais indicadores per capita do painel):
+  frota_automovel_por_1k   — automóvel
+  frota_moto_por_1k        — motocicleta, motoneta, ciclomotor, triciclo, quadriciclo
+  frota_caminhao_por_1k    — caminhão, caminhão trator, caminhonete, camioneta
+  frota_onibus_por_1k      — ônibus, micro-ônibus
+  frota_total_por_1k       — coluna TOTAL da planilha (todos os tipos)
 
-Os arquivos CSV mensais têm colunas: UF, MUNICIPIO (nome texto), tipo veículo, total.
-Usamos dezembro de cada ano como referência.
+Fonte: a planilha "frota por município e tipo" de dezembro, que a SENATRAN publica na página
+anual https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-Senatran/frota-de-veiculos-<ano>.
+O nome do arquivo muda quase todo ano (frota_por_municipio_e_tipo-dez_15.rar,
+frota_munic_dezembro_2017.xls, frota-reg-munic-tipo-modelo-07-dezembro2020.xls,
+FrotapormunicipioetipoDezembro2024.xlsx…), então o link é achado na página, não fixado.
+Medido em 27/10/2026: o loader antigo usava CSVs do dados.transportes.gov.br que já dão 404, e
+só tinha 2020–2022. A página tem dezembro de 2015 a 2025.
 
-Indicadores (anuais, por 1000 hab.):
-  frota_automovel_por_1k   — automóveis / 1000 hab.
-  frota_moto_por_1k        — motocicletas / 1000 hab.
-  frota_caminhao_por_1k    — caminhões / 1000 hab.
-  frota_onibus_por_1k      — ônibus / 1000 hab.
-  frota_total_por_1k       — frota total / 1000 hab.
+O arquivo fica em pipeline/.cache/frota/. Um ano só é gravado se a planilha casou com pelo menos
+5.500 municípios; então substitui as cinco métricas daquele ano.
 
-Geocodificação: nome do município + UF → cod_ibge_7 via geo.municipios com
-normalização de texto (unaccent/lower) via unicodedata em Python.
-
-Uso:
-    python load_senatran.py                     # 2019-2024
-    python load_senatran.py --anos 2022 2023    # anos específicos
-    python load_senatran.py --skip-onibus       # pula ônibus
+Uso (precisa de xlrd e openpyxl — pipeline/.venv):
+    .venv/bin/python load_senatran.py                 # 2015–2025
+    .venv/bin/python load_senatran.py --anos 2023
 """
 
 import argparse
-import io
 import os
-import time
+import pathlib
+import re
+import subprocess
 import unicodedata
-import warnings
+from urllib.parse import urljoin
 
-import psycopg2
 import pandas as pd
+import psycopg2
 import requests
-import urllib3
 from psycopg2.extras import execute_values
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DB_PARAMS = dict(
     host=os.environ.get("POSTGRES_HOST", "localhost"),
@@ -49,345 +48,179 @@ DB_PARAMS = dict(
     password=os.environ.get("POSTGRES_PASSWORD", ""),
 )
 
-# Dados Abertos Transportes — API CKAN do portal dados.transportes.gov.br
-CKAN_API = "https://dados.transportes.gov.br/api/3/action"
-RENAVAM_PACKAGE = "registro-nacional-de-veiculos-automotores-renavam"
+PAGINA = "https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-Senatran/frota-de-veiculos-{ano}"
+CACHE = pathlib.Path(__file__).parent / ".cache" / "frota"
+HDR = {"User-Agent": "Mozilla/5.0 (brasil-em-dados)"}
 
-# Cache de URLs por ano — preenchido em runtime via CKAN API
-# Fallback para os anos cujos resource IDs são conhecidos
-RESOURCE_URLS_FALLBACK = {
-    2020: (
-        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
-        "resource/82b85990-ae4e-4b01-a8a7-e9ad30c47112/download/frota_munic_modelo_dezembro_2020.csv"
-    ),
-    2021: (
-        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
-        "resource/f211d37c-7f9e-4531-8f83-c6d66fb0a030/download/frota-munic-modelo-dezembro-2021.csv"
-    ),
-    2022: (
-        "https://dados.transportes.gov.br/dataset/12686da0-3d71-4499-b432-d270f785c907/"
-        "resource/9427992a-64e9-4ed2-bb78-a268bfada801/download/frota_munic_modelo_dezembro_2022.csv"
-    ),
-}
-
-
-def get_resource_url(ano: int) -> str | None:
-    """
-    Obtém a URL de download do CSV de frota por município para dezembro do ano.
-    Tenta o CKAN API primeiro; usa fallback se necessário.
-    """
-    # Fallback para anos com URL conhecida
-    if ano in RESOURCE_URLS_FALLBACK:
-        return RESOURCE_URLS_FALLBACK[ano]
-
-    # Tenta descobrir via CKAN API
-    try:
-        r = requests.get(
-            f"{CKAN_API}/package_show?id={RENAVAM_PACKAGE}",
-            timeout=20, verify=False
-        )
-        if r.status_code != 200:
-            return None
-        resources = r.json()["result"]["resources"]
-        target = f"12-{ano}"
-        for res in resources:
-            name = res.get("name", "")
-            if target in name and "zip" not in name.lower():
-                url = res.get("url", "")
-                if url:
-                    print(f"  CKAN: recurso encontrado: {name}")
-                    return url
-    except Exception as e:
-        print(f"  AVISO: CKAN API falhou: {e}")
-    return None
-
-# UF sigla → cod_uf IBGE
 UF_COD = {
-    "AC": 12, "AL": 27, "AP": 16, "AM": 13, "BA": 29, "CE": 23,
-    "DF": 53, "ES": 32, "GO": 52, "MA": 21, "MT": 51, "MS": 50,
-    "MG": 31, "PA": 15, "PB": 25, "PR": 41, "PE": 26, "PI": 22,
-    "RJ": 33, "RN": 24, "RS": 43, "RO": 11, "RR": 14, "SC": 42,
-    "SP": 35, "SE": 28, "TO": 17,
+    "AC": 12, "AL": 27, "AP": 16, "AM": 13, "BA": 29, "CE": 23, "DF": 53, "ES": 32, "GO": 52,
+    "MA": 21, "MT": 51, "MS": 50, "MG": 31, "PA": 15, "PB": 25, "PR": 41, "PE": 26, "PI": 22,
+    "RJ": 33, "RN": 24, "RS": 43, "RO": 11, "RR": 14, "SC": 42, "SP": 35, "SE": 28, "TO": 17,
 }
-
-# Tipos de veículo no CSV → chave interna
-TIPO_MAP = {
-    # Automóvel
-    "AUTOMOVEL":      "automovel",
-    "AUTOMÓVEL":      "automovel",
-    # Moto (inclui variações)
-    "MOTOCICLETA":    "moto",
-    "MOTONETA":       "moto",
-    "CICLOMOTOR":     "moto",
-    "TRICICLO":       "moto",
-    "QUADRICICLO":    "moto",
-    # Caminhão
-    "CAMINHAO":       "caminhao",
-    "CAMINHÃO":       "caminhao",
-    "CAMINHONETE":    "caminhao",
-    "CAMINHONETA":    "caminhao",
-    # Ônibus
-    "ONIBUS":         "onibus",
-    "ÔNIBUS":         "onibus",
-    "MICROONIBUS":    "onibus",
-    "MICROÔNIBUS":    "onibus",
-    "MINIBUS":        "onibus",
+# coluna da planilha (normalizada) → categoria
+CATEGORIA = {
+    "AUTOMOVEL": "automovel",
+    "MOTOCICLETA": "moto", "MOTONETA": "moto", "CICLOMOTOR": "moto", "TRICICLO": "moto", "QUADRICICLO": "moto",
+    "CAMINHAO": "caminhao", "CAMINHAO TRATOR": "caminhao", "CAMINHONETE": "caminhao", "CAMIONETA": "caminhao",
+    "ONIBUS": "onibus", "MICRO-ONIBUS": "onibus", "MICROONIBUS": "onibus",
 }
-
-
-def normalize_str(s: str) -> str:
-    """Remove acentos e converte para minúsculas."""
-    return "".join(
-        c for c in unicodedata.normalize("NFD", s)
-        if unicodedata.category(c) != "Mn"
-    ).lower().strip()
-
-
-def build_geocode_index(conn) -> dict[tuple[str, str], int]:
-    """
-    Constrói índice (nome_normalizado, sigla_uf) → cod_ibge_7
-    a partir de geo.municipios.
-    """
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT m.nome, u.sigla, m.cod_ibge_7
-            FROM geo.municipios m
-            JOIN geo.ufs u ON u.cod_uf = m.cod_uf
-        """)
-        rows = cur.fetchall()
-    index = {}
-    for nome, sigla, cod in rows:
-        key = (normalize_str(nome), sigla.upper())
-        index[key] = cod
-    print(f"  Índice de geocodificação: {len(index)} municípios")
-    return index
-
-
-def download_csv(ano: int) -> pd.DataFrame | None:
-    """Baixa CSV de frota por município para dezembro do ano via CKAN API."""
-    url = get_resource_url(ano)
-    if url is None:
-        print(f"  Sem recurso CSV disponível para {ano} no portal dados.transportes.gov.br")
-        return None
-    print(f"  GET {url[:100]} ...")
-    try:
-        r = requests.get(url, timeout=120, verify=False)
-        if r.status_code == 200:
-            for sep in (";", ",", "\t"):
-                try:
-                    df = pd.read_csv(io.BytesIO(r.content), sep=sep, dtype=str, encoding="latin-1")
-                    if len(df.columns) >= 4:
-                        return df
-                except Exception:
-                    pass
-            print(f"  AVISO: CSV com formato inesperado para {ano}")
-            return None
-        else:
-            print(f"  HTTP {r.status_code} para {ano}")
-            return None
-    except requests.exceptions.Timeout:
-        print(f"  Timeout para {ano}")
-        return None
-
-
-def upsert_metricas(rows: list[tuple], conn):
-    """Insere/atualiza registros em api.metricas_municipio."""
-    if not rows:
-        print("  Sem dados para inserir.")
-        return
-    with conn.cursor() as cur:
-        execute_values(
-            cur,
-            """
-            INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor)
-            VALUES %s
-            ON CONFLICT (cod_municipio, metrica, ano)
-            DO UPDATE SET valor = EXCLUDED.valor
-            """,
-            rows,
-            page_size=2000,
-        )
-    conn.commit()
-    print(f"  Upserted {len(rows):,} registros em api.metricas_municipio")
-
-
-# Mapeamento de colunas no formato LARGO (wide) para categorias internas
-# (usado quando o CSV tem uma coluna por tipo de veículo)
-WIDE_COL_MAP = {
-    "AUTOMOVEL":       "automovel",
-    "CAMINHAO":        "caminhao",
-    "CAMINHAO TRATOR": "caminhao",
-    "CAMINHONETE":     "caminhao",
-    "CAMIONETA":       "caminhao",
-    "MOTOCICLETA":     "moto",
-    "MOTONETA":        "moto",
-    "CICLOMOTOR":      "moto",
-    "TRICICLO":        "moto",
-    "QUADRICICLO":     "moto",
-    "ONIBUS":          "onibus",
-    "MICRO-ONIBUS":    "onibus",
+# Nome na planilha → nome na malha do IBGE: grafias antigas, renomeações e erros de digitação da
+# fonte. Revisado à mão em 27/10/2026 (o par mais próximo por difflib errava em 6 dos 41). Ficam de
+# fora de propósito: "MUNICIPIO NAO INFORMADO", IBITIUVA/SP (distrito de Pitangueiras) e BOA
+# ESPERANCA DO NORTE/MT (instalado depois da malha de 2022).
+ALIAS = {
+    ("LAGEDO DO TABOCAL", "BA"): "Lajedo do Tabocal", ("SANTA TERESINHA", "BA"): "Santa Terezinha",
+    ("BOM JESUS", "GO"): "Bom Jesus de Goiás", ("AMPARO DA SERRA", "MG"): "Amparo do Serra",
+    ("BARAO D0 MONTE ALTO", "MG"): "Barão de Monte Alto", ("BRASOPOLIS", "MG"): "Brazópolis",
+    ("GOUVEA", "MG"): "Gouveia", ("QUELUZITA", "MG"): "Queluzito", ("POXOREO", "MT"): "Poxoréu",
+    ("VILA BELA DA SANTISSIMA TRINDA", "MT"): "Vila Bela da Santíssima Trindade",
+    ("ELDORADO DOS CARAJAS", "PA"): "Eldorado do Carajás", ("SANTA ISABEL DO PARA", "PA"): "Santa Izabel do Pará",
+    ("CAMPO DE SANTANA", "PB"): "Tacima", ("SANTAREM", "PB"): "Joca Claudino",
+    ("SAO DOMINGOS DE POMBAL", "PB"): "São Domingos", ("BELEM DE SAO FRANCISCO", "PE"): "Belém do São Francisco",
+    ("IGUARACI", "PE"): "Iguaracy", ("LAGOA DO ITAENGA", "PE"): "Lagoa de Itaenga",
+    ("SAO FRANCISCO DE ASSIS DO PIAU", "PI"): "São Francisco de Assis do Piauí",
+    ("BELA VISTA DO CAROBA", "PR"): "Bela Vista da Caroba", ("MUNHOZ DE MELLO", "PR"): "Munhoz de Melo",
+    ("PINHAL DO SAO BENTO", "PR"): "Pinhal de São Bento", ("SANTA CRUZ DO MONTE CASTELO", "PR"): "Santa Cruz de Monte Castelo",
+    ("ARMACAO DE BUZIOS", "RJ"): "Armação dos Búzios", ("PARATI", "RJ"): "Paraty",
+    ("TRAJANO DE MORAIS", "RJ"): "Trajano de Moraes", ("ASSU", "RN"): "Açu", ("BOA SAUDE", "RN"): "Januário Cicco",
+    ("NOVA DO MAMORE", "RO"): "Nova Mamoré", ("BALNEARIO DE PICARRAS", "SC"): "Balneário Piçarras",
+    ("LAGEADO GRANDE", "SC"): "Lajeado Grande", ("PRESIDENTE CASTELO BRANCO", "SC"): "Presidente Castello Branco",
+    ("SAO LOURENCO D'OESTE", "SC"): "São Lourenço do Oeste", ("SAO MIGUEL D'OESTE", "SC"): "São Miguel do Oeste",
+    ("AMPARO DE SAO FRANCISCO", "SE"): "Amparo do São Francisco", ("GRACCHO CARDOSO", "SE"): "Gracho Cardoso",
+    ("EMBU", "SP"): "Embu das Artes", ("COUTO DE MAGALHAES", "TO"): "Couto Magalhães",
+    ("FORTALEZA DO TABOCAO", "TO"): "Tabocão", ("SAO VALERIO DA NATIVIDADE", "TO"): "São Valério",
 }
+METRICA = {"automovel": "frota_automovel_por_1k", "moto": "frota_moto_por_1k", "caminhao": "frota_caminhao_por_1k",
+           "onibus": "frota_onibus_por_1k", "total": "frota_total_por_1k"}
 
 
-def _is_wide_format(df: pd.DataFrame) -> bool:
-    """Detecta se o CSV está no formato largo (uma coluna por tipo de veículo)."""
-    return "AUTOMOVEL" in df.columns and ("TIPO" not in " ".join(df.columns))
+def norm(s) -> str:
+    s = "".join(c for c in unicodedata.normalize("NFD", str(s)) if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", s).strip().upper()
 
 
-def processar_ano(conn, ano: int, geo_index: dict, pop_map: dict,
-                  skip_onibus: bool = False):
-    """Processa um ano de dados SENATRAN — suporta formato tall (2020/2022) e wide (2021)."""
-    df = download_csv(ano)
-    if df is None:
-        print(f"  Não foi possível obter dados de {ano}")
-        return
+def chave_nome(s) -> str:
+    """Nome de município para casar planilha × malha: sem acento, hífen, apóstrofo nem espaço."""
+    return re.sub(r"[^A-Z0-9]", "", norm(s))
 
-    # Normaliza nomes de colunas
-    df.columns = [str(c).strip().upper() for c in df.columns]
-    # Remove BOM do primeiro nome de coluna (UTF-8 com BOM → 'Ï»¿UF' → 'UF')
-    if df.columns[0].startswith("Ï"):
-        df.columns = ["UF"] + list(df.columns[1:])
-    print(f"  Ano {ano}: colunas = {list(df.columns)}")
 
-    col_uf  = next((c for c in df.columns if c == "UF" or (c.startswith("UF") and len(c) <= 5)), None)
-    col_mun = next((c for c in df.columns if "MUNICIPIO" in c or "MUNICÍPIO" in c), None)
+def achar_link(ano: int) -> str:
+    html = requests.get(PAGINA.format(ano=ano), headers=HDR, timeout=60).text
+    for href in re.findall(r'href="([^"]+)"', html):
+        nome = href.removesuffix("/@@download/file").rsplit("/", 1)[-1]
+        n = re.sub(r"[^a-z0-9]", "", nome.lower())
+        if "dez" in n and any(p in n for p in ("frotapormunicipioetipo", "frotamunic", "frotaregmunic")):
+            return urljoin(PAGINA.format(ano=ano), href)
+    raise FileNotFoundError(f"sem planilha de dezembro por município na página de {ano}")
 
-    if not col_uf or not col_mun:
-        print(f"  ERRO: colunas UF ou MUNICIPIO não encontradas")
-        return
 
-    if _is_wide_format(df):
-        # ── Formato largo: uma coluna por tipo de veículo ──
-        # Agrega por município somando as colunas relevantes
-        mun_tipo: dict[tuple[int, str], float] = {}
-        miss = 0
-        for _, row in df.iterrows():
-            uf  = str(row[col_uf]).strip().upper()
-            mun = str(row[col_mun]).strip()
-            key = (normalize_str(mun), uf)
-            cod = geo_index.get(key)
-            if cod is None:
-                miss += 1
-                continue
-            for col_name, cat in WIDE_COL_MAP.items():
-                if col_name in df.columns:
-                    try:
-                        val = float(str(row[col_name]).replace(".", "").replace(",", "."))
-                    except (ValueError, TypeError):
-                        val = 0.0
-                    k = (cod, cat)
-                    mun_tipo[k] = mun_tipo.get(k, 0.0) + val
-        print(f"  Ano {ano} (wide): {len(set(c for c,_ in mun_tipo))} municípios, {miss} geocod. falhas")
-    else:
-        # ── Formato alto (tall): UF, MUNICIPIO, TIPO, QUANTIDADE ──
-        col_tipo = next((c for c in df.columns if "TIPO" in c), None)
-        col_qtd  = next((c for c in df.columns if "TOTAL" in c or "QTD" in c or "QUANTIDADE" in c), None)
-        if not col_tipo or not col_qtd:
-            print(f"  AVISO: colunas TIPO/QTD não encontradas. TIPO={col_tipo}, QTD={col_qtd}")
-            return
+def baixar(ano: int) -> pathlib.Path:
+    feitos = [p for p in CACHE.glob(f"{ano}.*") if p.suffix in (".xls", ".xlsx")]
+    if feitos:
+        return feitos[0]
+    url = achar_link(ano)
+    nome = url.removesuffix("/@@download/file").rsplit("/", 1)[-1]
+    ext = nome.rsplit(".", 1)[-1].lower()
+    bruto = CACHE / f"{ano}-bruto.{ext}"
+    r = requests.get(url, headers=HDR, timeout=300)
+    r.raise_for_status()
+    bruto.write_bytes(r.content)
+    print(f"  {ano}: baixado {nome} ({len(r.content):,} bytes)", flush=True)
+    if ext in ("xls", "xlsx"):
+        return bruto.rename(CACHE / f"{ano}.{ext}")
+    # .rar/.zip com uma planilha dentro
+    destino = CACHE / f"{ano}-x"
+    destino.mkdir(exist_ok=True)
+    subprocess.run(["bsdtar", "-xf", str(bruto), "-C", str(destino)], check=True)
+    dentro = [p for p in destino.rglob("*") if p.suffix.lower() in (".xls", ".xlsx")]
+    if len(dentro) != 1:
+        raise RuntimeError(f"{nome}: {len(dentro)} planilhas dentro")
+    return dentro[0].rename(CACHE / f"{ano}{dentro[0].suffix.lower()}")
 
-        df[col_qtd] = pd.to_numeric(
-            df[col_qtd].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False),
-            errors="coerce"
-        ).fillna(0)
 
-        contagens: dict[tuple[str, str, str], float] = {}
-        for _, row in df.iterrows():
-            uf   = str(row[col_uf]).strip().upper()
-            mun  = str(row[col_mun]).strip()
-            tipo = str(row[col_tipo]).strip().upper()
-            qtd  = float(row[col_qtd]) if pd.notna(row[col_qtd]) else 0.0
-            key_tipo = TIPO_MAP.get(tipo, "outro")
-            k = (uf, mun, key_tipo)
-            contagens[k] = contagens.get(k, 0.0) + qtd
+def ler(arq: pathlib.Path) -> pd.DataFrame:
+    """A planilha tem linhas de título antes do cabeçalho; acha a aba e a linha com UF e MUNICIPIO.
+    (A de 2015 abre num glossário, e a aba de dados se chama JUL_2015 embora o arquivo seja o de
+    dezembro: o total, 90.686.936, fica entre dez/2014 e dez/2016.)"""
+    for aba, bruto in pd.read_excel(arq, header=None, dtype=str, sheet_name=None).items():
+        for i in range(min(40, len(bruto))):
+            celulas = [norm(c) for c in bruto.iloc[i].tolist()]
+            if "UF" in celulas and any(c.startswith("MUNICIPIO") for c in celulas):
+                df = bruto.iloc[i + 1:].copy()
+                df.columns = celulas
+                return df
+    raise RuntimeError(f"{arq.name}: cabeçalho UF/MUNICIPIO não encontrado")
 
-        mun_tipo: dict[tuple[int, str], float] = {}
-        miss = 0
-        for (uf, mun, tipo), qtd in contagens.items():
-            key = (normalize_str(mun), uf)
-            cod = geo_index.get(key)
-            if cod is None:
-                miss += 1
-                continue
-            k = (cod, tipo)
-            mun_tipo[k] = mun_tipo.get(k, 0.0) + qtd
 
-        print(f"  Ano {ano} (tall): {len(mun_tipo)} (cod,tipo), {miss} geocodificações falhas")
-
-    # Agrega total
-    totais: dict[int, float] = {}
-    por_tipo: dict[str, dict[int, float]] = {
-        "automovel": {}, "moto": {}, "caminhao": {}, "onibus": {}
-    }
-
-    for (cod, tipo), qtd in mun_tipo.items():
-        totais[cod] = totais.get(cod, 0.0) + qtd
-        if tipo in por_tipo:
-            por_tipo[tipo][cod] = por_tipo[tipo].get(cod, 0.0) + qtd
-
-    # Gera rows normalizadas por pop
-    rows = []
-    for cod, total in totais.items():
-        pop = pop_map.get(cod)
-        if not pop or pop <= 0:
-            continue
-        rows.append((cod, "frota_total_por_1k", ano, total / pop * 1000))
-
-    tipo_metricas = [
-        ("automovel", "frota_automovel_por_1k"),
-        ("moto",      "frota_moto_por_1k"),
-        ("caminhao",  "frota_caminhao_por_1k"),
-    ]
-    if not skip_onibus:
-        tipo_metricas.append(("onibus", "frota_onibus_por_1k"))
-
-    for tipo, metrica in tipo_metricas:
-        for cod, qtd in por_tipo[tipo].items():
-            pop = pop_map.get(cod)
-            if pop and pop > 0:
-                rows.append((cod, metrica, ano, qtd / pop * 1000))
-
-    print(f"  Ano {ano}: {len(rows)} registros a inserir")
-    upsert_metricas(rows, conn)
+def numero(v) -> float:
+    s = "" if v is None else str(v).strip()
+    if s in ("", "nan", "NaN", "-"):
+        return 0.0
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+", s):        # 1.234.567 como texto
+        s = s.replace(".", "")
+    return float(s.replace(",", "."))
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Carrega frota veicular SENATRAN em api.metricas_municipio"
-    )
-    parser.add_argument(
-        "--anos", nargs="+", type=int,
-        default=[2020, 2021, 2022],
-        help="Anos a carregar (padrão: 2020-2022 — anos com CSV disponível)"
-    )
-    parser.add_argument("--skip-onibus", action="store_true",
-                        help="Pula frota de ônibus")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="Carrega frota SENATRAN (dezembro) em api.metricas_municipio")
+    ap.add_argument("--anos", nargs="+", type=int, default=list(range(2015, 2026)))
+    ap.add_argument("--sem-gravar", action="store_true", help="só lê e mostra o resumo")
+    args = ap.parse_args()
+    CACHE.mkdir(parents=True, exist_ok=True)
 
-    print("Conectando ao banco...")
     conn = psycopg2.connect(**DB_PARAMS)
+    with conn.cursor() as cur:
+        cur.execute("""SELECT m.nome, u.sigla, m.cod_ibge_7, m.populacao_2022
+                       FROM geo.municipios m JOIN geo.ufs u ON u.cod_uf = m.cod_uf""")
+        malha = cur.fetchall()
+        cur.execute("""CREATE TABLE IF NOT EXISTS api.metricas_frota_antes_20261027 AS
+                       SELECT * FROM api.metricas_municipio WHERE metrica LIKE 'frota\\_%'""")
+        conn.commit()
+    indice = {(chave_nome(n), s): c for n, s, c, _ in malha}
+    pop = {c: p for _, _, c, p in malha if p and p > 0}
 
-    try:
-        geo_index = build_geocode_index(conn)
-
+    for ano in args.anos:
+        try:
+            df = ler(baixar(ano))
+        except FileNotFoundError as e:
+            print(f"  {ano}: {e}", flush=True)
+            continue
+        col_mun = next(c for c in df.columns if c.startswith("MUNICIPIO"))
+        tipos = {c: CATEGORIA[c] for c in df.columns if c in CATEGORIA}
+        sem_tipo = [c for c in df.columns if c not in CATEGORIA and c not in ("UF", col_mun, "TOTAL", "NAN", "")]
+        soma, nao_casou = {}, []
+        for _, r in df.iterrows():
+            uf = norm(r["UF"])
+            if uf not in UF_COD:
+                continue
+            nome = ALIAS.get((norm(r[col_mun]), uf), r[col_mun])
+            cod = indice.get((chave_nome(nome), uf))
+            if cod is None:
+                nao_casou.append(f"{r[col_mun]}/{uf}")
+                continue
+            s = soma.setdefault(cod, dict.fromkeys(METRICA, 0.0))
+            for col, cat in tipos.items():
+                s[cat] += numero(r[col])
+            s["total"] += numero(r["TOTAL"])
+        brasil = {cat: sum(s[cat] for s in soma.values()) for cat in METRICA}
+        resumo = (f"{len(soma)} municípios; frota {brasil['total']:,.0f} (automóvel {brasil['automovel']:,.0f}, "
+                  f"moto {brasil['moto']:,.0f}, caminhão {brasil['caminhao']:,.0f}, ônibus {brasil['onibus']:,.0f}); "
+                  f"não casaram {len(nao_casou)} {nao_casou[:6]}; colunas sem categoria: {sem_tipo}")
+        if args.sem_gravar:
+            print(f"  {ano}: {resumo}", flush=True)
+            continue
+        if len(soma) < 5500:
+            print(f"  {ano}: NÃO gravado — {resumo}", flush=True)
+            continue
+        linhas = [(cod, METRICA[cat], ano, v / pop[cod] * 1000)
+                  for cod, s in soma.items() if cod in pop for cat, v in s.items()]
         with conn.cursor() as cur:
-            cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
-            pop_map = {r[0]: r[1] for r in cur.fetchall()}
-
-        print(f"  Pop map: {len(pop_map)} municípios")
-
-        for ano in args.anos:
-            print(f"\n──── SENATRAN: frota veicular {ano} ────")
-            processar_ano(conn, ano, geo_index, pop_map, skip_onibus=args.skip_onibus)
-    finally:
-        conn.close()
-
-    print("\n=== Concluído ===")
-    print("Verificar com:")
-    print("  SELECT metrica, ano, COUNT(*), ROUND(AVG(valor)::numeric,1) AS media")
-    print("  FROM api.metricas_municipio")
-    print("  WHERE metrica LIKE 'frota_%'")
-    print("  GROUP BY metrica, ano ORDER BY metrica, ano;")
+            cur.execute("DELETE FROM api.metricas_municipio WHERE ano = %s AND metrica LIKE 'frota\\_%%'", (ano,))
+            execute_values(cur, "INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor) VALUES %s",
+                           linhas, page_size=2000)
+            conn.commit()
+        print(f"  {ano}: GRAVADO — {resumo}", flush=True)
+    conn.close()
 
 
 if __name__ == "__main__":
