@@ -95,6 +95,11 @@ This is an **independent build**, not a maintained product. What it does not hav
   CNEFE addresses need the full stack: `docker compose up postgis pgbouncer api martin frontend nginx`
   plus a data load.
 - Coverage and freshness follow the upstream sources, which vary by dataset and by year.
+- **Notifiable diseases (SINAN) count cases by municipality of residence**, with the Ministry of
+  Health case definitions: dengue probable cases, tuberculosis and leprosy new cases, visceral
+  leishmaniasis confirmed cases. Tuberculosis 2019 gives 74,212 new cases against 73,864 in the
+  official bulletin. Counting raw notifications, as an earlier version did, overstated
+  leishmaniasis about fivefold. Tuberculosis 2020–2023 comes from preliminary files.
 - **Municipal debt / RCL (RGF) is noisy at the source.** Municipalities file it themselves, and
   the reported ratio and the one implied by the same filing (debt ÷ Senate limit × 120) agree
   within 0.05 pp in only 29 of 39 sampled filings (2016, 2020, 2023). The disagreements look

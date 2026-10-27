@@ -27,6 +27,9 @@ json.dump(m.query_anos(), open("demo/anos.json", "w"), default=int)
 PY
 cp demo/anos.json demo/web/anos.json
 python3 demo/extrair_catalogo.py | grep -E "ERRO|FIM"
+for m in $METRICAS; do   # extração vazia (ex.: sem POSTGRES_* no ambiente) não pode chegar ao testador
+  [ -n "$(ls demo/dados/$m 2>/dev/null)" ] || { echo "== $m sem dados extraídos: NÃO publico"; exit 1; }
+done
 (cd frontend && VITE_DEMO=1 VITE_MARTIN_URL=/martin VITE_API_URL= npx vite build --base=/brasil-em-dados/ --outDir ../demo/dist --emptyOutDir 2>&1 | grep -E "error|built in")
 mkdir -p demo/dist/demo && cp demo/web/* demo/dist/demo/ && rm -rf demo/dist/demo/dados && cp -r demo/dados demo/dist/demo/dados && cp -r demo/cubo demo/dist/demo/cubo; touch demo/dist/.nojekyll
 mv tests/e2e/relatorio "tests/e2e/relatorio-pre-siconfi-$(date +%H%M)" 2>/dev/null
