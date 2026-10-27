@@ -137,7 +137,11 @@ def main():
             except FileNotFoundError as e:
                 print(f"  {doenca} {ano}: não publicado ({e})", flush=True)
                 continue
-            casos = {int(k): v for k, v in c["casos"].items()}
+            casos = collections.Counter()
+            for k, v in c["casos"].items():
+                # 5399xx são as regiões administrativas do DF, que o DataSUS codifica à parte e a malha
+                # do IBGE não tem: tudo é Brasília (530010). Sem isto sumiam 5.532 casos de dengue em 2022.
+                casos[530010 if 539900 <= int(k) <= 539999 else int(k)] += v
             fora = sum(v for k, v in casos.items() if k not in pop)
             # todo município com população entra: sem caso no ano é incidência ZERO, não "sem dado"
             linhas = [(cod7, metrica, ano, casos.get(cod6, 0) / p * 100_000) for cod6, (cod7, p) in pop.items()]
