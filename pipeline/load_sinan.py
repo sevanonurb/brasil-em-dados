@@ -1,37 +1,44 @@
 #!/usr/bin/env python3
 """
 load_sinan.py
-Carrega dados do SINAN (Sistema de Informação de Agravos de Notificação) via PySUS
-para api.metricas_municipio.
+Carrega dados do SINAN (Sistema de Informação de Agravos de Notificação), direto do FTP do
+DataSUS, para api.metricas_municipio.
 
-Calcula incidência (casos por 100k hab.) por município e ano para:
-  incidencia_dengue        — DENG (código SINAN)
-  incidencia_tuberculose   — TUBE
-  incidencia_hanseniase    — HANS
-  incidencia_leishmaniose  — LEIV (leishmaniose visceral)
+Calcula incidência (casos por 100k hab.) por município DE RESIDÊNCIA e ano:
+  incidencia_dengue        — DENG, casos prováveis: tudo menos descartado (CLASSI_FIN 5). O arquivo
+                             FINAIS já vem sem descartados (2015: só 10/11/12 e 8 inconclusivo), então a
+                             regra só pesa nos PRELIM
+  incidencia_tuberculose   — TUBE, casos novos: TRATAMENTO 1/4/6 (novo, não sabe, pós-óbito),
+                             sem mudança de diagnóstico (SITUA_ENCE 5)
+  incidencia_hanseniase    — HANS, casos novos: MODOENTR 1
+  incidencia_leishmaniose  — LEIV (visceral), casos confirmados: CLASSI_FIN 1
 
-Campo de município: ID_MUNICIP (6 dígitos DataSUS).
-Conversão 6→7 dígitos: cod_ibge_7 = ID_MUNICIP * 10 (via join com geo.municipios).
+Por que essas regras (medido em 27/10/2026): o loader antigo contava TODA notificação pelo
+município que notificou. Na leishmaniose 2023 isso eram 8.190 registros, dos quais 1.717
+confirmados e 5.923 descartados — a incidência saía ~5× maior; e 35,6% dos registros têm
+residência ≠ notificação (7,8% na tuberculose, 8,3% na hanseníase).
 
-ATENÇÃO: DataSUS FTP tem rate-limit. Use --workers 1 (padrão).
+Arquivo: /dissemin/publicos/SINAN/DADOS/FINAIS/<DOENÇA>BR<aa>.dbc, ou PRELIM quando ainda não
+fechou. O .dbc fica em pipeline/.cache/sinan/ e a contagem em sinan-<DOENÇA>-<ano>.json, então
+rodar de novo não baixa nada.
 
-Uso:
-    python load_sinan.py                          # 2020-2024, todas as doenças
-    python load_sinan.py --anos 2022 2023         # anos específicos
-    python load_sinan.py --doencas DENG TUBE      # doenças específicas
-    python load_sinan.py --workers 1              # padrão seguro
+Uso (precisa de pyreaddbc e dbfread — pipeline/.venv):
+    .venv/bin/python load_sinan.py                       # 2015–2023, as quatro
+    .venv/bin/python load_sinan.py --anos 2022 --doencas DENG
 """
 
 import argparse
+import collections
+import json
 import os
-import tempfile
+import pathlib
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from ftplib import FTP
 
 import psycopg2
-import pandas as pd
+from dbfread import DBF
 from psycopg2.extras import execute_values
-from pysus.online_data import SINAN
+from pyreaddbc import dbc2dbf
 
 DB_PARAMS = dict(
     host=os.environ.get("POSTGRES_HOST", "localhost"),
@@ -41,183 +48,108 @@ DB_PARAMS = dict(
     password=os.environ.get("POSTGRES_PASSWORD", ""),
 )
 
-# Mapeamento código SINAN → nome da métrica
 DOENCAS = {
-    "DENG": "incidencia_dengue",
-    "TUBE": "incidencia_tuberculose",
-    "HANS": "incidencia_hanseniase",
-    "LEIV": "incidencia_leishmaniose",
+    "DENG": ("incidencia_dengue",       lambda r: r["CLASSI_FIN"] != "5"),
+    "TUBE": ("incidencia_tuberculose",  lambda r: r["TRATAMENTO"] in ("1", "4", "6") and r["SITUA_ENCE"].strip() != "5"),
+    "HANS": ("incidencia_hanseniase",   lambda r: r["MODOENTR"] == "1"),
+    "LEIV": ("incidencia_leishmaniose", lambda r: r["CLASSI_FIN"] == "1"),
 }
-
-ANO_INICIO = 2015
-ANO_FIM    = 2023
-
-
-def get_conn():
-    return psycopg2.connect(**DB_PARAMS)
+CAMPOS = {"DENG": ["CLASSI_FIN"], "TUBE": ["TRATAMENTO", "SITUA_ENCE"], "HANS": ["MODOENTR"], "LEIV": ["CLASSI_FIN"]}
+FTP_HOST, FTP_DIR = "ftp.datasus.gov.br", "/dissemin/publicos/SINAN/DADOS"
+CACHE = pathlib.Path(__file__).parent / ".cache" / "sinan"
 
 
-def get_pop_map(conn) -> dict[int, float]:
-    """
-    Retorna {cod_ibge_7: populacao_2022} para normalização.
-    Também suporta busca por cod_6d: usa cod_ibge_7 // 10 como chave alternativa.
-    """
-    with conn.cursor() as cur:
-        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
-        rows = cur.fetchall()
-    # Indexa por cod_6d (cod_ibge_7 // 10) para facilitar join com SINAN
-    return {r[0] // 10: r[1] for r in rows if r[1] and r[1] > 0}
-
-
-def get_cod7_map(conn) -> dict[int, int]:
-    """Retorna {cod_6d: cod_ibge_7} para conversão de códigos."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT cod_ibge_7 FROM geo.municipios")
-        rows = cur.fetchall()
-    return {r[0] // 10: r[0] for r in rows}
-
-
-def upsert_metricas(rows: list[tuple], conn):
-    """Insere/atualiza registros em api.metricas_municipio."""
-    if not rows:
-        return
-    with conn.cursor() as cur:
-        execute_values(
-            cur,
-            """
-            INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor)
-            VALUES %s
-            ON CONFLICT (cod_municipio, metrica, ano)
-            DO UPDATE SET valor = EXCLUDED.valor
-            """,
-            rows,
-            page_size=2000,
-        )
-    conn.commit()
-
-
-def processar_doenca_ano(dis_code: str, ano: int, pop_map: dict[int, float],
-                          cod7_map: dict[int, int]) -> list[tuple]:
-    """
-    Baixa dados SINAN para uma doença/ano, agrega por município e calcula incidência.
-    Retorna lista de (cod_municipio_7d, metrica, ano, incidencia_por_100k).
-    """
-    metrica = DOENCAS[dis_code]
-    print(f"  [{dis_code}] Baixando ano {ano}...")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
+def baixar(doenca: str, ano: int) -> tuple[pathlib.Path, str]:
+    nome = f"{doenca}BR{ano % 100:02d}.dbc"
+    destino = CACHE / nome
+    for pasta in ("FINAIS", "PRELIM"):
+        if destino.exists() and (CACHE / f"{nome}.{pasta}").exists():
+            return destino, pasta
+    for tentativa in range(5):
         try:
-            parquet_set = SINAN.download(dis_code, ano, data_path=tmpdir)
-            df = parquet_set.to_dataframe()
+            ftp = FTP(FTP_HOST, timeout=300); ftp.login()
+            for pasta in ("FINAIS", "PRELIM"):
+                if nome in [p.rsplit("/", 1)[-1] for p in ftp.nlst(f"{FTP_DIR}/{pasta}")]:
+                    parcial = destino.with_suffix(".parcial")
+                    with open(parcial, "wb") as o:
+                        ftp.retrbinary(f"RETR {FTP_DIR}/{pasta}/{nome}", o.write)
+                    parcial.rename(destino)
+                    (CACHE / f"{nome}.{pasta}").touch()
+                    return destino, pasta
+            raise FileNotFoundError(nome)
+        except FileNotFoundError:
+            raise
         except Exception as e:
-            print(f"  ERRO [{dis_code}] {ano}: {e}")
-            return []
-
-    if df is None or df.empty:
-        print(f"  [{dis_code}] {ano}: DataFrame vazio")
-        return []
-
-    # Campo de município no SINAN
-    col_mun = None
-    for cand in ("ID_MUNICIP", "MUNICIPIO_RESIDENCIA", "MUN_RESI", "CO_MUN_NOT"):
-        if cand in df.columns:
-            col_mun = cand
-            break
-
-    if col_mun is None:
-        print(f"  [{dis_code}] {ano}: campo de município não encontrado. Colunas: {list(df.columns[:15])}")
-        return []
-
-    df[col_mun] = pd.to_numeric(df[col_mun], errors="coerce")
-    df = df.dropna(subset=[col_mun])
-    df[col_mun] = df[col_mun].astype(int)
-
-    # Agrega contagem por município (6 dígitos)
-    contagem = df.groupby(col_mun).size().to_dict()
-
-    # Todo município com população entra: sem notificação no ano é incidência ZERO, não "sem dado".
-    # (Antes só os municípios com casos ganhavam linha; em 2023 a leishmaniose aparecia em 818 de 5.570.)
-    rows = []
-    for cod6, pop in pop_map.items():
-        cod7 = cod7_map.get(cod6)
-        if cod7 is None or not pop or pop <= 0:
-            continue
-        incidencia = contagem.get(cod6, 0) / pop * 100_000
-        rows.append((cod7, metrica, ano, incidencia))
-
-    print(f"  [{dis_code}] {ano}: {len(rows)} municípios ({sum(contagem.values()):,} casos)")
-    return rows
+            print(f"    FTP {nome}: {type(e).__name__}: {e} — tentativa {tentativa + 1}", flush=True)
+            time.sleep(30 * (tentativa + 1))
+    raise RuntimeError(f"FTP {nome}: tentativas esgotadas")
 
 
-def carregar_doenca(conn, dis_code: str, anos: list[int], workers: int = 1):
-    """Carrega todos os anos de uma doença SINAN."""
-    metrica = DOENCAS[dis_code]
-    print(f"\n=== SINAN: {metrica} ({dis_code}) — {anos} ===")
-
-    pop_map  = get_pop_map(conn)
-    cod7_map = get_cod7_map(conn)
-
-    todos_rows = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(processar_doenca_ano, dis_code, ano, pop_map, cod7_map): ano
-            for ano in anos
-        }
-        for fut in as_completed(futures):
-            ano = futures[fut]
-            try:
-                rows = fut.result()
-                todos_rows.extend(rows)
-            except Exception as e:
-                print(f"  ERRO [{dis_code}] {ano}: {e}")
-
-    if todos_rows:
-        upsert_metricas(todos_rows, conn)
-        print(f"  {metrica}: {len(todos_rows):,} registros inseridos")
+def contar(doenca: str, ano: int) -> dict:
+    """{"casos": {cod6_residência: n}, "notificacoes", "casos_total", "sem_residencia", "fonte"}"""
+    arq = CACHE / f"sinan-{doenca}-{ano}.json"
+    if arq.exists():
+        return json.loads(arq.read_text())
+    dbc, pasta = baixar(doenca, ano)
+    dbf = dbc.with_suffix(".dbf")
+    dbc2dbf(str(dbc), str(dbf))
+    regra = DOENCAS[doenca][1]
+    casos, n, sem = collections.Counter(), 0, 0
+    try:
+        for r in DBF(str(dbf), encoding="latin-1", load=False):
+            n += 1
+            if not regra({k: (r.get(k) or "") for k in CAMPOS[doenca]}):
+                continue
+            mun = (r.get("ID_MN_RESI") or "").strip()
+            if mun.isdigit():
+                casos[int(mun[:6])] += 1
+            else:
+                sem += 1
+    finally:
+        dbf.unlink(missing_ok=True)
+    res = {"casos": {str(k): v for k, v in casos.items()}, "notificacoes": n,
+           "casos_total": sum(casos.values()) + sem, "sem_residencia": sem, "fonte": pasta}
+    arq.write_text(json.dumps(res))
+    return res
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Carrega SINAN (agravos de notificação) em api.metricas_municipio"
-    )
-    parser.add_argument(
-        "--anos", nargs="+", type=int,
-        default=list(range(ANO_INICIO, ANO_FIM + 1)),
-        help=f"Anos a carregar (padrão: {ANO_INICIO}-{ANO_FIM})"
-    )
-    parser.add_argument(
-        "--doencas", nargs="+", default=list(DOENCAS.keys()),
-        choices=list(DOENCAS.keys()),
-        help=f"Códigos SINAN a carregar (padrão: todos — {list(DOENCAS.keys())})"
-    )
-    parser.add_argument(
-        "--workers", type=int, default=1,
-        help="Downloads paralelos por doença (padrão: 1 — DataSUS FTP tem rate-limit)"
-    )
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="Carrega SINAN (agravos de notificação) em api.metricas_municipio")
+    ap.add_argument("--anos", nargs="+", type=int, default=list(range(2015, 2024)))
+    ap.add_argument("--doencas", nargs="+", default=list(DOENCAS), choices=list(DOENCAS))
+    args = ap.parse_args()
+    CACHE.mkdir(parents=True, exist_ok=True)
 
-    doencas = [d.upper() for d in args.doencas]
-    invalidas = [d for d in doencas if d not in DOENCAS]
-    if invalidas:
-        print(f"Doenças inválidas: {invalidas}. Opções: {list(DOENCAS.keys())}")
-        return
+    conn = psycopg2.connect(**DB_PARAMS)
+    with conn.cursor() as cur:
+        cur.execute("SELECT cod_ibge_7, populacao_2022 FROM geo.municipios WHERE populacao_2022 > 0")
+        pop = {c // 10: (c, p) for c, p in cur.fetchall()}
+        cur.execute("""CREATE TABLE IF NOT EXISTS api.metricas_sinan_antes_20261027 AS
+                       SELECT * FROM api.metricas_municipio WHERE metrica LIKE 'incidencia\\_%'""")
+        conn.commit()
 
-    print("Conectando ao banco...")
-    conn = get_conn()
-
-    try:
-        for dis_code in doencas:
-            carregar_doenca(conn, dis_code, args.anos, workers=args.workers)
-            time.sleep(2)  # pausa entre doenças para evitar rate-limit FTP
-    finally:
-        conn.close()
-
-    print("\n=== Concluído ===")
-    print("Verificar com:")
-    print("  SELECT metrica, ano, COUNT(*), ROUND(AVG(valor)::numeric,1) AS media_100k")
-    print("  FROM api.metricas_municipio")
-    print("  WHERE metrica LIKE 'incidencia_%'")
-    print("  GROUP BY metrica, ano ORDER BY metrica, ano;")
+    for doenca in args.doencas:
+        metrica = DOENCAS[doenca][0]
+        for ano in args.anos:
+            t = time.time()
+            try:
+                c = contar(doenca, ano)
+            except FileNotFoundError as e:
+                print(f"  {doenca} {ano}: não publicado ({e})", flush=True)
+                continue
+            casos = {int(k): v for k, v in c["casos"].items()}
+            fora = sum(v for k, v in casos.items() if k not in pop)
+            # todo município com população entra: sem caso no ano é incidência ZERO, não "sem dado"
+            linhas = [(cod7, metrica, ano, casos.get(cod6, 0) / p * 100_000) for cod6, (cod7, p) in pop.items()]
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM api.metricas_municipio WHERE metrica = %s AND ano = %s", (metrica, ano))
+                execute_values(cur, "INSERT INTO api.metricas_municipio (cod_municipio, metrica, ano, valor) VALUES %s",
+                               linhas, page_size=2000)
+                conn.commit()
+            print(f"  {doenca} {ano} [{c['fonte']}]: {c['notificacoes']:,} notificações → {c['casos_total']:,} casos "
+                  f"(sem residência {c['sem_residencia']:,}, residência fora da malha {fora:,}); "
+                  f"{len(linhas)} municípios ({time.time() - t:.0f}s)", flush=True)
+    conn.close()
 
 
 if __name__ == "__main__":
